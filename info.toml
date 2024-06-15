@@ -1,0 +1,8 @@
+[meta]
+name     = "Medal Collection"
+author   = "SilPho"
+category = "Race"
+version  = "1.0.0"
+
+[script]
+dependencies = [ 'NadeoServices' ]
