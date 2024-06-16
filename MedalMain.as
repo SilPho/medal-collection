@@ -10,26 +10,30 @@ int currentMapMedal = -99; // Can't use -1, because we use that for unfinished m
 void Main() {
     // Set up HTTP access for downloading records
     NadeoServices::AddAudience("NadeoServices");
-    // NadeoServices::AddAudience("NadeoLiveServices");
 
     // Load any previous data
-    readStorageFile();
+    int filesRead = readStorageFiles();
+
+    if (filesRead == 0) {
+        print("No existing MedalCollection JSON files found - Assuming first installation");
+        UI::ShowNotification("Medal Collection", "Thank you for installing the Medal Collection plugin. Fetching your past medals now...");
+        checkAllRecords();
+    }
 
     // Start a co-routine to watch for race-finish events
     startnew(checkForFinish);
 
-    // Finally, loop indefinitely to check for map loading
-    checkForMapLoad();
-    // (Don't add any more code below this)
+    // Finally, keep an eye out for newly loaded maps
+    startnew(checkForMapLoad);
+
+    print("Medal Collection initialised");
 }
 
 void checkForMapLoad() {
-    print("Medal Collection initialised");
-
     while (true) {
-        updateUIState();
-		auto playerInGame = isPlayerInGame();
-        if (playerInGame) {
+        updateUiVisibility();
+
+        if (isPlayerInGame()) {
             checkForNewMap();
         }
         else {
@@ -52,12 +56,12 @@ void checkForNewMap() {
         showUI = true;
         currentMapId = mapId;
 
-        checkForBetterMedal();
+        checkForEarnedMedal();
     }
 }
 
 // Returns true if a valid time was located
-bool checkForBetterMedal() {
+bool checkForEarnedMedal() {
     auto app = cast<CTrackMania>(GetApp());
     auto network = cast<CTrackManiaNetwork>(app.Network);
     auto scoreMgr = network.ClientManiaAppPlayground.ScoreMgr;
@@ -69,8 +73,6 @@ bool checkForBetterMedal() {
     } else {
         userId.Value = uint(-1);
     }
-
-    // log ("Map ID: " + currentMapId);
 
     uint time = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
     uint medal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
@@ -91,13 +93,12 @@ bool checkForBetterMedal() {
 void checkForFinish() {
     int prevUiSequence = 0;
     bool playgroundLoaded = false;
-    log("Starting finish checker");
 
     while(true) {
         auto playground = GetApp().CurrentPlayground;
         if (playground !is null && playground.GameTerminals.Length > 0) {
             if (playgroundLoaded == false) {
-                log("Entered a new map");
+                log("Player loaded a new map");
                 playgroundLoaded = true;
 
                 // If we loaded a map we don't need to show a random one any more
@@ -111,7 +112,8 @@ void checkForFinish() {
                     log('Finish detected');
 
                     // If the time has yet to be registered, wait until next tick
-                    holdForMedalCheck = !checkForBetterMedal();
+                    // This works great for the first earned medal, but getting a new medal can sometimes go unnoticed if playing Random Map Challenge
+                    holdForMedalCheck = !checkForEarnedMedal();
                 }
 
                 if (uiSequence != prevUiSequence && !holdForMedalCheck) {
@@ -120,7 +122,7 @@ void checkForFinish() {
                 }
         }
         else if (playgroundLoaded == true) {
-            log("Heading back to main menu");
+            log("Played is heading back to main menu");
             playgroundLoaded = false;
             currentMapMedal = -99;
         }

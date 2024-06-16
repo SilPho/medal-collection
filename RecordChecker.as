@@ -11,7 +11,7 @@ void getMapMedals() {
 
     int numMedals = processMapIds(medalLookup);
 
-    writeStorageFile();
+    writeAllStorageFiles();
 
     UI::ShowNotification("Medal Collection", "Medal Collection updated with " + numMedals + " medals!");
 }
@@ -25,7 +25,7 @@ dictionary getUserMedals() {
     Json::Value allRecordResults = Json::Parse(nadeoResponse);
     log("Total number of medals found: " + allRecordResults.Length);
 
-    dictionary mapLookup = {};
+    dictionary mapLookup;
 
     for (uint i = 0; i < allRecordResults.Length; i++) {
         string mapId = string(allRecordResults[i]["mapId"]);

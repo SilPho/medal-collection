@@ -11,11 +11,11 @@ void RenderMenu() {
 	if (UI::BeginMenu("\\$db4" + Icons::Trophy + "\\$g Medal Collection")) {
 		if(UI::MenuItem("Show window in game", "", settings_showInGame)) {
 			settings_showInGame = !settings_showInGame;
-			updateUIState();
+			updateUiVisibility();
 		}
 		if(UI::MenuItem("Show window in main menu", "", settings_showInMenus)) {
 			settings_showInMenus = !settings_showInMenus;
-			updateUIState();
+			updateUiVisibility();
 		}
 
 		UI::Separator();
@@ -28,7 +28,7 @@ void RenderMenu() {
 	}
 }
 
-void updateUIState() {
+void updateUiVisibility() {
 	if (isPlayerInGame()) {
 		showUI = settings_showInGame;
 	}
