@@ -66,8 +66,15 @@ void loadMap() {
 
     CTrackMania@ app = cast<CTrackMania@>(GetApp());
 
+    // Try to close the pause menu, if it is visible, before we kick back to the main menu
+    if (app.Network.PlaygroundClientScriptAPI.IsInGameMenuDisplayed) {
+        log("Closing pause menu");
+        app.Network.PlaygroundInterfaceScriptHandler.CloseInGameMenu(CGameScriptHandlerPlaygroundInterface::EInGameMenuResult::Quit);
+    }
+
     // Return to the main menu first (Otherwise PlayMap doesn't work)
     app.BackToMainMenu();
+
     while (!app.ManiaTitleControlScriptAPI.IsReady) {
         yield();
     }
