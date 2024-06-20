@@ -2,7 +2,7 @@
 name     = "Medal Collection"
 author   = "SilPho"
 category = "Race"
-version  = "1.0.0"
+version  = "1.1"
 
 [script]
 dependencies = [ 'NadeoServices' ]

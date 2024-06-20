@@ -31,7 +31,7 @@ dictionary mapDict;
 // Mapping of medals to mapUid[]
 dictionary medalDict;
 
-void updateSaveData(string &in mapId, int bestMedal, bool suppressWriting = false) {
+void updateSaveData(const string &in mapId, int bestMedal, bool suppressWriting = false) {
     bool hadMedalAlready = mapDict.Exists(mapId);
     int currentMedal = int(mapDict[mapId]);
     bool improvedMedal = currentMedal < bestMedal;
@@ -53,15 +53,7 @@ void updateSaveData(string &in mapId, int bestMedal, bool suppressWriting = fals
                 allMedals[i].count--;
 
                 // Also need to remove it from the random map pool
-                auto mapPoolForThisMedal = getMapPool(currentMedal);
-                int mapIndex = mapPoolForThisMedal.Find(mapId);
-
-                if (mapIndex >= 0) {
-                    mapPoolForThisMedal.RemoveAt(mapIndex);
-                }
-                else {
-                    warn("Unable to locate " + mapId + " in the old list");
-                }
+                deleteFromMapPool(mapId, currentMedal);
             }
         }
         mapDict.Set(mapId, bestMedal);
@@ -74,6 +66,40 @@ void updateSaveData(string &in mapId, int bestMedal, bool suppressWriting = fals
 
 array<string> getMapPool(int medalId) {
     return cast<array<string>>(medalDict["" + medalId]);
+}
+
+void deleteMapFromStorage(const string &in mapId) {
+    log("Deleting mapID (" + mapId + ") from storage");
+    int previousMedal = -99; // Temp value
+    mapDict.Get(mapId, previousMedal);
+
+    if (previousMedal == 99) {
+        warn("Tried to remove a map that doesn't seem to exist: " + mapId);
+        return;
+    }
+
+    // Lower the current visible medal count (Superficial)
+    for(uint i=0; i < allMedals.Length; i++){
+        if (allMedals[i].medalId == previousMedal) {
+            allMedals[i].count--;
+        }
+    }
+
+    // Actually delete the map from the permanent record
+    mapDict.Delete(mapId);
+    writeSingleStorageFile(mapId);
+}
+
+void deleteFromMapPool(const string &in mapUid, int currentMedal) {
+    auto mapPoolForThisMedal = getMapPool(currentMedal);
+    int mapIndex = mapPoolForThisMedal.Find(mapUid);
+
+    if (mapIndex >= 0) {
+        mapPoolForThisMedal.RemoveAt(mapIndex);
+    }
+    else {
+        warn("Unable to locate " + mapUid + " in the old list");
+    }
 }
 
 /*
@@ -137,7 +163,7 @@ void writeDictionaryToFile(string &in char, dictionary alphaDict) {
 void writeAllStorageFiles() {
     dictionary alphaDict; // Dictionary of dictionaries
 
-    print("About to write all storage files");
+    log("About to write all storage files");
 
     // Part 1: Read the known list and group them into buckets
     auto allMaps = mapDict.GetKeys();
@@ -183,7 +209,7 @@ int readStorageFiles() {
     }
 
     string rootPath = IO::FromStorageFolder("");
-    print(rootPath);
+    log(rootPath);
     array<string> existingFiles = IO::IndexFolder(rootPath, false);
     log("Found " + existingFiles.Length + " potential record files to read");
     int numCollectionsFound = 0;

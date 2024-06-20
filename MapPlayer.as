@@ -19,7 +19,7 @@ void playRandomMap(int medalType) {
     auto availableMaps = getMapPool(medalType);
 
     if (availableMaps.Length <= 0) {
-        nextRandomMap.mapName = "No more. Click to cycle again";
+        nextRandomMap.mapName = "No more maps. Clicking the button will cycle through them again";
         rebuildMapPool(medalType);
         return;
     }
@@ -41,13 +41,26 @@ void getMapDetails() {
     string nadeoResponse = getFromUrl(url);
     Json::Value mapDetails = Json::Parse(nadeoResponse);
 
+    const string mapType = string(mapDetails[0]["mapType"]);
+    const string mapName = string(mapDetails[0]["name"]);
+
     if (mapDetails.Length != 1) {
         nextRandomMap.mapName = "Something went wrong. Please try again";
     }
+    else if (!isValidMapType(mapType)) {
+        // Invalid map type found - Somehow some dodgy data got into the Storage
+        nextRandomMap.mapName = "Oops, " + mapName + "$g is a " + mapType + " map. Removed it from your collection to keep things tidy";
+        deleteMapFromStorage(nextRandomMap.mapUid);
 
-    nextRandomMap.mapName = mapDetails[0]["name"];
-    nextRandomMap.mapFileUrl = mapDetails[0]["fileUrl"];
-    log("Map name: " + nextRandomMap.mapName + ". Map URL: " + nextRandomMap.mapFileUrl);
+        // We don't need to remove it from the random map pool because it was already removed when it was randomly chosen
+    }
+    else {
+        // Map is valid and good to go
+        nextRandomMap.mapName = mapName;
+        nextRandomMap.mapFileUrl = mapDetails[0]["fileUrl"];
+        log("Map name: " + mapName + ". Map URL: " + nextRandomMap.mapFileUrl);
+    }
+
 }
 
 // Actually requests the map to be played

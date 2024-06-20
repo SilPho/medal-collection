@@ -2,10 +2,15 @@ string getCurrentMapId() {
 	auto app = cast<CTrackMania>(GetApp());
 	auto map = app.RootMap;
 
-	if (map !is null && app.Editor is null) {
+	if (map !is null && app.Editor is null && isValidMapType(map.MapType)) {
 		return map.MapInfo.MapUid;
 	}
 	return "";
+}
+
+// For now I'm assuming that only TM_Race is a valid map type
+bool isValidMapType(const string &in mapType) {
+    return mapType == "TrackMania\\TM_Race";
 }
 
 bool isPlayerInGame() {

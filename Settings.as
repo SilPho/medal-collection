@@ -27,6 +27,9 @@ bool settings_showRandomiserButtons = true;
 [Setting  category="Column Options" name="Show cumulative totals" description="Include the sum of all higher medal tiers as well (Shown in brackets)"]
 bool settings_showTotals = false;
 
+[Setting  category="Column Options" name="Show percentages" description="Show the percentage of medals earned at each tier"]
+bool settings_showPercentages = false;
+
 [Setting  category="Column Options" name="Show unfinished map count" description="Unfinished maps from before the plugin was installed won't be counted"]
 bool settings_showUnfinished = false;
 

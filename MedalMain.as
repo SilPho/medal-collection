@@ -56,6 +56,9 @@ void checkForNewMap() {
         showUI = true;
         currentMapId = mapId;
 
+        // When loading a map, check to see if a medal was earned previously
+        // For new maps this will trigger an "unfinished" medal to be saved
+        // For maps you've played before, it's a sanity check
         checkForEarnedMedal();
     }
 }
@@ -96,6 +99,8 @@ void checkForFinish() {
 
     while(true) {
         auto playground = GetApp().CurrentPlayground;
+
+        // Only check if we are in-game and on a map that the plugin supports (Eg: Not Royal)
         if (playground !is null && playground.GameTerminals.Length > 0) {
             if (playgroundLoaded == false) {
                 log("Player loaded a new map");
@@ -105,21 +110,32 @@ void checkForFinish() {
                 clearNextMap();
             }
 
+            // This state probably means we're playing Royal
+            if (currentMapId == "") {
+                continue;
+            }
+
             auto terminal = playground.GameTerminals[0];
             auto uiSequence = terminal.UISequence_Current;
-                bool holdForMedalCheck = false;
-                if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::Finish) {
-                    log('Finish detected');
 
-                    // If the time has yet to be registered, wait until next tick
-                    // This works great for the first earned medal, but getting a new medal can sometimes go unnoticed if playing Random Map Challenge
-                    holdForMedalCheck = !checkForEarnedMedal();
-                }
+            bool stopChecking = true;
 
-                if (uiSequence != prevUiSequence && !holdForMedalCheck) {
-                    log("UI Sequence changed: " + uiSequence + ". Prev: " + prevUiSequence);
-                    prevUiSequence = uiSequence;
-                }
+            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::Finish) {
+                // If the time has yet to be registered, wait until next tick
+                // This works great for the first earned medal, but doesn't help for medal improvements
+                stopChecking = checkForEarnedMedal();
+            }
+
+            // If the new time wasn't ready when we did a check on finish, it might be ready during the EndRound sequence
+            // This should help catch medal improvements, but won't get triggered during Random Map Challenge
+            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::EndRound) {
+                checkForEarnedMedal();
+            }
+
+            if (uiSequence != prevUiSequence && stopChecking) {
+                log("UI Sequence changed: " + uiSequence + ". Prev: " + prevUiSequence);
+                prevUiSequence = uiSequence;
+            }
         }
         else if (playgroundLoaded == true) {
             log("Played is heading back to main menu");
