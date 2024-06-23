@@ -112,6 +112,7 @@ void checkForFinish() {
 
             // This state probably means we're playing Royal
             if (currentMapId == "") {
+                 yield();
                 continue;
             }
 
