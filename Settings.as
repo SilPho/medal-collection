@@ -30,7 +30,10 @@ bool settings_showTotals = false;
 [Setting  category="Column Options" name="Show percentages" description="Show the percentage of medals earned at each tier"]
 bool settings_showPercentages = false;
 
-[Setting  category="Column Options" name="Show unfinished map count" description="Unfinished maps from before the plugin was installed won't be counted"]
+[Setting  category="Column Options" name="Show cumulative percentages" description="Include the percentage of all higher medal tiers as well"]
+bool settings_showTotalPercentages = false;
+
+[Setting  category="Column Options" name="Show \"Played\" map counter" description="These are maps you have played but not finished. Doesn't count maps from before the plugin was installed"]
 bool settings_showUnfinished = false;
 
 // ----------------------------

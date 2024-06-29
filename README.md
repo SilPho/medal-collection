@@ -39,13 +39,19 @@ Toggles a small circle for each medal, in an appropriate colour.
 Toggles the full name of the medals. You can hide these to save space or keep them visible to make things clearer.
 
 ### Show \"Play Random Map\" buttons"
-
+Clicking on one of these buttons will randomly select a map from that medal category and present you with a button that you can use to jump directly into that map. Very useful if you want to figure out which maps you only have a bronze medal on and want to improve.
 Note: This will require club access to let you download and play these maps.
 
 ### Show cumulative totals
 Since earning the gold medal, for instance, means you've obviously beaten the required time for silver and bronze medals, this option lets you count every medal in each of the lower tiers. This has the added benefit of showing you the total number of maps you've finished. The cumulative totals will appear alongside the per-medal counters, not instead of them.
 
-### Show unfinished map count
+### Show percentages
+Display the relative percentage of each medal alongside the number of medals in that tier.
+
+### Show cumulative percentages
+Similar to cumulative totals, this will show the total percentage of each medal and all higher tiers. Since this would always display 100% for the "played" category, that gets hidden.
+
+### Show played but unfinished map count
 Keep track of every map you've attempted but couldn't finish. Maybe you can finish them later. This is hidden by default, since there's nothing to be ashamed of if you can't finish difficult maps.
 Please note that Unfinished maps from before the plugin was installed won't be counted because there's no online history of unfinished maps that the plugin can check.
 

@@ -73,13 +73,22 @@ void displayUI() {
 				+ (settings_showColours ? 1 : 0)
 				+ (settings_showNames ? 1 : 0)
 				+ (settings_showRandomiserButtons ? 1 : 0)
+				+ (settings_showPercentages && !settings_horizontalMode ? 1 : 0)
 				+ (settings_showTotals && !settings_horizontalMode ? 1 : 0)
+				+ (settings_showTotalPercentages && !settings_horizontalMode ? 1 : 0)
 			) * (settings_horizontalMode ? numMedals : 1);
 
 	if (UI::BeginTable("medalTable", numColumns)) {
 		UI::TableNextRow();
 
 		int cumulative = 0;
+		float totalMedals = 0; // Using float because it makes percentage calcs work
+		for(uint i = 0; i < allMedals.Length; i++) {
+			if (allMedals[i].medalId != -1 || settings_showUnfinished) {
+				totalMedals += allMedals[i].count;
+			}
+		}
+
 		for(uint i = 0; i < allMedals.Length; i++) {
 			int medalId = allMedals[i].medalId;
 
@@ -94,42 +103,73 @@ void displayUI() {
 			}
 
 			if (settings_showRandomiserButtons) {
-				auto buttonColour = allMedals[i].buttonHsv;
+				array<float> blackBg = { 0.0, 0.0, 0.0 };
+				auto buttonColour = settings_showColours ? blackBg : allMedals[i].buttonHsv;
 				UI::TableNextColumn();
 				UI::PushID("Improve" + medalId);
 				if (UI::ButtonColored(Icons::Random, buttonColour[0], buttonColour[1], buttonColour[2])) {
 					playRandomMap(medalId);
 				}
+				if (UI::IsItemHovered()) {
+					UI::BeginTooltip();
+					UI::Text("Click here to find a random map " + allMedals[i].tooltipSuffix);
+					UI::EndTooltip();
+				}
 				UI::PopID();
+			}
+
+			if (currentMapMedal == medalId) {
+				UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 0, 1));
 			}
 
 			if (settings_showNames) {
 				UI::TableNextColumn();
 				UI::AlignTextToFramePadding();
-				UI::Text("" + (currentMapMedal == medalId ? '\\$ff0' : '') + allMedals[i].name);
+				UI::Text(allMedals[i].name);
 			}
 
 			// Medal count
 			UI::TableNextColumn();
 			string countText = "";
-			if (settings_showTotals && medalId != -1) {
-				cumulative += allMedals[i].count;
-				countText = "" + cumulative;
-				string msgSoFar = "" + (currentMapMedal == medalId ? '\\$ff0' : '') + allMedals[i].count;
-				string suffix = cumulative != allMedals[i].count ? ("(" + cumulative + ")") : "";
+			cumulative += allMedals[i].count;
+			countText = "" + cumulative;
+			string medalCount = "" + allMedals[i].count;
 
-				if(settings_horizontalMode) {
-					UI::Text(msgSoFar + " " + suffix);
+			float percent = Math::Round(allMedals[i].count / totalMedals * 100);
+			float cumulativePercent = Math::Round(cumulative / totalMedals * 100);
+			bool showCumulativePercent = settings_showTotalPercentages && cumulativePercent != 100 && (!settings_showPercentages || cumulative != allMedals[i].count);
+
+			if(settings_horizontalMode) {
+				if (settings_showPercentages) {
+					medalCount += " (" + percent + "%)";
 				}
-				else {
-					UI::Text(msgSoFar);
-					UI::TableNextColumn();
-					UI::Text(suffix);
+				if (settings_showTotals && cumulative != allMedals[i].count) {
+					medalCount += " [" + cumulative + "]";
 				}
+				if (showCumulativePercent) {
+					medalCount += " [" + cumulativePercent + "%]";
+				}
+
+				UI::Text(medalCount);
 			}
 			else {
-				countText = "" + allMedals[i].count;
-				UI::Text("" + (currentMapMedal == medalId ? '\\$ff0' : '') + countText);
+				UI::Text(medalCount);
+				if (settings_showPercentages) {
+					UI::TableNextColumn();
+					UI::Text("" + percent + "%");
+				}
+				if (settings_showTotals) {
+					UI::TableNextColumn();
+					UI::Text(cumulative != allMedals[i].count ? "" + cumulative + "" : "");
+				}
+				if (showCumulativePercent) {
+					UI::TableNextColumn();
+					UI::Text(cumulative != allMedals[i].count ? "" + cumulativePercent + "%" : "");
+				}
+			}
+
+			if (currentMapMedal == medalId) {
+				UI::PopStyleColor();
 			}
 
 			if (!settings_horizontalMode) {
