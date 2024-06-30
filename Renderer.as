@@ -135,8 +135,8 @@ void displayUI() {
 			countText = "" + cumulative;
 			string medalCount = "" + allMedals[i].count;
 
-			float percent = Math::Round(allMedals[i].count / totalMedals * 100);
-			float cumulativePercent = Math::Round(cumulative / totalMedals * 100);
+			float percent = totalMedals > 0 ? Math::Round(allMedals[i].count / totalMedals * 100) : 0;
+			float cumulativePercent = totalMedals > 0 ? Math::Round(cumulative / totalMedals * 100) : 0;
 			bool showCumulativePercent = settings_showTotalPercentages && cumulativePercent != 100 && (!settings_showPercentages || cumulative != allMedals[i].count);
 
 			if(settings_horizontalMode) {
