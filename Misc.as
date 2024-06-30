@@ -34,10 +34,11 @@ void waitForNadeoAuthentication() {
     while (!NadeoServices::IsAuthenticated("NadeoServices")) {
         yield();
     }
-    log("Nadeo authentication in progress");
-    while (!NadeoServices::IsAuthenticated("NadeoLiveServices")) {
-        yield();
-    }
+    // Looks like we don't need the Live endpoint after all
+    // log("Nadeo authentication in progress");
+    // while (!NadeoServices::IsAuthenticated("NadeoLiveServices")) {
+    //     yield();
+    // }
     log("Nadeo authentication confirmed");
 }
 
