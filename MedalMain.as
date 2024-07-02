@@ -77,12 +77,20 @@ bool checkForEarnedMedal() {
         userId.Value = uint(-1);
     }
 
-    uint time = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
-    uint medal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
-    log("Best medal is " + medal + ". Best time is " + time);
+    // We don't really care about times, but it helps figure out the difference between played and finished
+    uint raceTime = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
+    uint stuntTime = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "Stunt", "");
+    uint raceMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
+    uint stuntMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "Stunt", "");
+
+    log("Best medal is " + raceMedal + " or " + stuntMedal + ". Best time is " + raceTime + " or " + stuntTime);
+
+    uint medal = Math::Max(raceMedal, stuntMedal);
+    // Math::Min doesn't seem to work with MAX_INT, so we'll just check both times separately
 
     // Medal is 0 if the map is unfinished OR if you didn't reach bronze. So, check for a time to ensure medal 0 means finished.
-    if (time < MAX_INT) {
+    if (raceTime < MAX_INT || stuntTime < MAX_INT) {
+        log("Earned " + medal);
         currentMapMedal = medal;
         updateSaveData(currentMapId, medal);
         return true;
@@ -129,7 +137,7 @@ void checkForFinish() {
 
             // If the new time wasn't ready when we did a check on finish, it might be ready during the EndRound sequence
             // This should help catch medal improvements, but won't get triggered during Random Map Challenge
-            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::EndRound) {
+            if (prevUiSequence != uiSequence && (uiSequence == CGamePlaygroundUIConfig::EUISequence::EndRound || uiSequence == CGamePlaygroundUIConfig::EUISequence::UIInteraction)) {
                 checkForEarnedMedal();
             }
 

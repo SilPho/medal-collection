@@ -10,7 +10,7 @@ string getCurrentMapId() {
 
 // For now I'm assuming that only TM_Race is a valid map type
 bool isValidMapType(const string &in mapType) {
-    return mapType == "TrackMania\\TM_Race";
+    return mapType == "TrackMania\\TM_Race" || mapType == "TrackMania\\TM_Stunt";
 }
 
 bool isPlayerInGame() {
