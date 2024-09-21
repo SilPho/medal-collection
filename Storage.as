@@ -16,13 +16,20 @@ class MedalCount {
 	}
 }
 
+// The value of these is important - "Better" medals need higher numbers
+const int WARRIOR_MEDAL_ID = 10;
+const int AUTHOR_MEDAL_ID = 4; // This has to match what Nadeo uses (same for Gold, etc)
+const int UNFINISHED_MEDAL_ID = -1;
+const int NO_MEDAL_ID = -99;
+
 // This is where we keep the really important numbers
-auto author = MedalCount(4, "Author", "\\$071", { 0.34, 1, 0.47 }, "you earned an Author medal on");
+auto warrior = MedalCount(WARRIOR_MEDAL_ID, "Warrior", "\\$000", { 0.34, 1, 0.47 }, "you earned a Warrior medal on");
+auto author = MedalCount(AUTHOR_MEDAL_ID, "Author", "\\$071", { 0.34, 1, 0.47 }, "you earned an Author medal on");
 auto gold = MedalCount(3, "Gold", "\\$db4", { 0.13, 0.70, 0.87}, "you earned a Gold medal on");
 auto silver = MedalCount(2, "Silver", "\\$899", { 0.5, 0.11, 0.60}, "you earned a Silver medal on");
 auto bronze = MedalCount(1, "Bronze", "\\$964", { 0.06, 0.57, 0.6}, "you earned a Bronze medal on");
 auto finishes = MedalCount(0, "Finished", "\\$aaf", { 0.66, 0.32, 0.96}, "you have finished but didn't get a medal on");
-auto unfinished = MedalCount(-1, "Played", "\\$ccc", { 0.5, 0.11, 0.60}, "you have played but not finished yet" );
+auto unfinished = MedalCount(UNFINISHED_MEDAL_ID, "Played", "\\$ccc", { 0.5, 0.11, 0.60}, "you have played but not finished yet" );
 
 // The order these are added will be the order they are displayed to the user
 array<MedalCount@> allMedals = {author, gold, silver, bronze, finishes, unfinished };
@@ -33,36 +40,59 @@ dictionary mapDict;
 // Mapping of medals to mapUid[]
 dictionary medalDict;
 
-void updateSaveData(const string &in mapId, int bestMedal, bool suppressWriting = false) {
-    bool hadMedalAlready = mapDict.Exists(mapId);
+void initialiseStorage() {
+#if DEPENDENCY_WARRIORMEDALS
+    // Since the WarriorMedals plugin provides an interface for fetching colours, might as well use it
+    warrior.color = WarriorMedals::GetColorStr();
+    vec3 v = WarriorMedals::GetColorVec();
+    v = UI::ToHSV(v.x, v.y, v.z);
+    warrior.buttonHsv = { v.x, v.y, v.z };
+
+    allMedals.InsertAt(0, warrior);
+#endif
+
+    print('Storage is good to go');
+}
+
+// Updates the save data if required. Returns true if a change is made, false otherwise
+bool updateSaveData(const string &in mapId, int bestMedal, bool suppressWriting = false) {
     int currentMedal = int(mapDict[mapId]);
     bool improvedMedal = currentMedal < bestMedal;
+    bool hadMedalAlready = mapDict.Exists(mapId);
 
-    // Only make changes (and write the file) if necessary
-    if (!hadMedalAlready || improvedMedal) {
-        log("Is this a NEW medal? " + !hadMedalAlready + " OR is it an improvement: " + improvedMedal);
+    if (hadMedalAlready && !improvedMedal) {
+        return false;
+    }
 
-        for(uint i=0; i < allMedals.Length; i++){
-            if (allMedals[i].medalId == bestMedal) {
-                print("New record on " + mapId + ". Medal earned: " + allMedals[i].name);
-                // Increase count for new medal type
-                allMedals[i].count++;
-                getMapPool(bestMedal).InsertLast(mapId);
-            }
-            if (hadMedalAlready && allMedals[i].medalId == currentMedal) {
-                // Since there was an old medal, better remove that first
-                log("Removing old medal: " + allMedals[i].name);
-                allMedals[i].count--;
+    log("This is either a new medal: " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + currentMedal + "/" + bestMedal + ")");
+    forceUpdateSaveDataa(mapId, bestMedal, suppressWriting);
+    return true;
+}
 
-                // Also need to remove it from the random map pool
-                deleteFromMapPool(mapId, currentMedal);
-            }
+void forceUpdateSaveDataa(const string &in mapId, int bestMedal, bool suppressWriting = false) {
+    bool hadMedalAlready = mapDict.Exists(mapId);
+    int currentMedal = int(mapDict[mapId]);
+
+    for(uint i=0; i < allMedals.Length; i++){
+        if (allMedals[i].medalId == bestMedal) {
+            print("New record on " + mapId + ". Medal earned: " + allMedals[i].name);
+            // Increase count for new medal type
+            allMedals[i].count++;
+            getMapPool(bestMedal).InsertLast(mapId);
         }
-        mapDict.Set(mapId, bestMedal);
+        if (hadMedalAlready && allMedals[i].medalId == currentMedal) {
+            // Since there was an old medal, better remove that first
+            log("Removing old medal: " + allMedals[i].name);
+            allMedals[i].count--;
 
-        if (!suppressWriting) {
-            writeSingleStorageFile(mapId);
+            // Also need to remove it from the random map pool
+            deleteFromMapPool(mapId, currentMedal);
         }
+    }
+    mapDict.Set(mapId, bestMedal);
+
+    if (!suppressWriting) {
+        writeSingleStorageFile(mapId);
     }
 }
 
@@ -70,12 +100,15 @@ array<string> getMapPool(int medalId) {
     return cast<array<string>>(medalDict["" + medalId]);
 }
 
+/**
+ * Permanently remove a map from storage (Designed for recovering from software bugs rather than expecting players to lose medals)
+ */
 void deleteMapFromStorage(const string &in mapId) {
     log("Deleting mapID (" + mapId + ") from storage");
-    int previousMedal = -99; // Temp value
+    int previousMedal = NO_MEDAL_ID; // Temp value
     mapDict.Get(mapId, previousMedal);
 
-    if (previousMedal == 99) {
+    if (previousMedal == NO_MEDAL_ID) {
         warn("Tried to remove a map that doesn't seem to exist: " + mapId);
         return;
     }
@@ -92,6 +125,9 @@ void deleteMapFromStorage(const string &in mapId) {
     writeSingleStorageFile(mapId);
 }
 
+/**
+ * Remove a map from the in-memory storage (Usually to remove it from the random-map button pools)
+ */
 void deleteFromMapPool(const string &in mapUid, int currentMedal) {
     auto mapPoolForThisMedal = getMapPool(currentMedal);
     int mapIndex = mapPoolForThisMedal.Find(mapUid);
@@ -109,6 +145,7 @@ void deleteFromMapPool(const string &in mapUid, int currentMedal) {
  * This is usually used when the random map button has run out of options and needs to cycle round again
  */
 void rebuildMapPool(int medalIdForEmptyPool) {
+    // Empty the list, if it wasn't already
     medalDict.Set("" + medalIdForEmptyPool, array<string>(0));
     auto mapPool = getMapPool(medalIdForEmptyPool);
 
@@ -248,6 +285,12 @@ void readStorageFile(string &in jsonFile) {
             auto allIds = mapList.GetKeys();
             for(uint i=0; i < allIds.Length; i++) {
                 auto medalEarned = int(mapList.Get("" + allIds[i]));
+#if !DEPENDENCY_WARRIORMEDALS
+                // If the Warrior plugin was uninstalled then just revert to Author
+                if (medalEarned == WARRIOR_MEDAL_ID) {
+                    medalEarned = AUTHOR_MEDAL_ID;
+                }
+#endif
                 mapDict.Set(allIds[i], medalEarned);
                 auto newTotal = int(tempMedals["" + medalEarned]) + 1;
                 tempMedals.Set("" + medalEarned, newTotal);

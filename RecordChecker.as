@@ -1,4 +1,4 @@
-void checkAllRecords() {
+void recheckNormalRecords() {
     // Start on a new thread (ish)
     startnew(getMapMedals);
 }
@@ -11,6 +11,7 @@ void getMapMedals() {
 
     int numMedals = processMapIds(medalLookup);
 
+    // Do this now, just in case anything goes wrong with checking other records
     writeAllStorageFiles();
 
     UI::ShowNotification("Medal Collection", "Medal Collection updated with " + numMedals + " medals!");
@@ -18,18 +19,26 @@ void getMapMedals() {
 
 dictionary getUserMedals() {
     string accountId = GetApp().LocalPlayerInfo.WebServicesUserId;
-    string url = NadeoServices::BaseURLCore() + "/mapRecords/?accountIdList=" + accountId;
+    string url = NadeoServices::BaseURLCore() + "/v2/accounts/" + accountId + "/mapRecords";
 
-    string nadeoResponse = getFromUrl(url);
+    string raceResponse = getFromUrl(url);
+    string stuntResponse = getFromUrl(url + "?gameMode=Stunt");
 
-    Json::Value allRecordResults = Json::Parse(nadeoResponse);
-    log("Total number of medals found: " + allRecordResults.Length);
+    Json::Value raceResults = Json::Parse(raceResponse);
+    Json::Value stuntResults = Json::Parse(stuntResponse);
+    log("Total number of medals found: " + (raceResults.Length + stuntResults.Length) + ". (" + raceResults.Length + " Race. " + stuntResults.Length + " Stunt)");
 
     dictionary mapLookup;
 
-    for (uint i = 0; i < allRecordResults.Length; i++) {
-        string mapId = string(allRecordResults[i]["mapId"]);
-        int medal = int(allRecordResults[i]["medal"]);
+    // There's probably a cleaner way to parse 2 lists, but this will do since they get aggregated together
+    for (uint i = 0; i < raceResults.Length; i++) {
+        string mapId = string(raceResults[i]["mapId"]);
+        int medal = int(raceResults[i]["medal"]);
+        mapLookup[mapId] = medal;
+    }
+    for (uint i = 0; i < stuntResults.Length; i++) {
+        string mapId = string(stuntResults[i]["mapId"]);
+        int medal = int(stuntResults[i]["medal"]);
         mapLookup[mapId] = medal;
     }
 

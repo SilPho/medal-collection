@@ -1,15 +1,16 @@
 // Your completion time on a track is this by default
 uint MAX_INT = 4294967295;
 
-string accountId; // Set once after init
-
 bool showUI = false;
 string currentMapId = "";
-int currentMapMedal = -99; // Can't use -1, because we use that for unfinished maps
+int currentMapMedal = NO_MEDAL_ID;
 
 void Main() {
     // Set up HTTP access for downloading records
     NadeoServices::AddAudience("NadeoServices");
+
+    // Prepare the Storage class - It needs to check for some dependency stuff
+    initialiseStorage();
 
     // Load any previous data
     int filesRead = readStorageFiles();
@@ -17,7 +18,8 @@ void Main() {
     if (filesRead == 0) {
         print("No existing MedalCollection JSON files found - Assuming first installation");
         UI::ShowNotification("Medal Collection", "Thank you for installing the Medal Collection plugin. Fetching your past medals now...");
-        checkAllRecords();
+        recheckNormalRecords();
+        recheckWarriorRecords(); // If plugin isn't installed, this returns quickly
     }
 
     // Start a co-routine to watch for race-finish events
@@ -65,8 +67,7 @@ void checkForNewMap() {
 
 // Returns true if a valid time was located
 bool checkForEarnedMedal() {
-    auto app = cast<CTrackMania>(GetApp());
-    auto network = cast<CTrackManiaNetwork>(app.Network);
+    auto network = cast<CTrackManiaNetwork>(GetApp().Network);
     auto scoreMgr = network.ClientManiaAppPlayground.ScoreMgr;
     auto userMgr = network.ClientManiaAppPlayground.UserMgr;
 
@@ -85,19 +86,24 @@ bool checkForEarnedMedal() {
 
     log("Best medal is " + raceMedal + " or " + stuntMedal + ". Best time is " + raceTime + " or " + stuntTime);
 
-    uint medal = Math::Max(raceMedal, stuntMedal);
+    currentMapMedal = Math::Max(raceMedal, stuntMedal);
     // Math::Min doesn't seem to work with MAX_INT, so we'll just check both times separately
 
-    // Medal is 0 if the map is unfinished OR if you didn't reach bronze. So, check for a time to ensure medal 0 means finished.
+    // Game will return 0 for unfinished maps AND for times slower than bronze. Checking for a time will differentiate it
     if (raceTime < MAX_INT || stuntTime < MAX_INT) {
-        log("Earned " + medal);
-        currentMapMedal = medal;
-        updateSaveData(currentMapId, medal);
+        log("Earned " + currentMapMedal);
+        int pluginMedal = checkForPluginMedals(currentMapId, raceTime);
+        if (pluginMedal > currentMapMedal) {
+            print("You've earned a third-party medal: " + pluginMedal);
+            currentMapMedal = pluginMedal;
+        }
+        updateSaveData(currentMapId, currentMapMedal);
         return true;
     }
 
-    currentMapMedal = -1;
-    updateSaveData(currentMapId, -1);
+    // If we don't have a race time, then the map hasn't been finished
+    currentMapMedal = UNFINISHED_MEDAL_ID;
+    updateSaveData(currentMapId, UNFINISHED_MEDAL_ID);
     return false;
 }
 
@@ -149,7 +155,7 @@ void checkForFinish() {
         else if (playgroundLoaded == true) {
             log("Played is heading back to main menu");
             playgroundLoaded = false;
-            currentMapMedal = -99;
+            currentMapMedal = NO_MEDAL_ID;
         }
         yield();
     }

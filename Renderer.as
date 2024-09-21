@@ -20,9 +20,16 @@ void RenderMenu() {
 
 		UI::Separator();
 
-		if(UI::MenuItem("Check ALL medals (May be slow)", "", false)) {
-			checkAllRecords();
+
+		if(UI::MenuItem("Re-check ALL medals (May be slow)", "", false)) {
+			recheckNormalRecords();
 		}
+
+#if DEPENDENCY_WARRIORMEDALS
+		if(UI::MenuItem("Re-check Warrior medals", "", false)) {
+			recheckWarriorRecords();
+		}
+#endif
 
 		UI::EndMenu();
 	}
@@ -84,7 +91,7 @@ void displayUI() {
 		int cumulative = 0;
 		float totalMedals = 0; // Using float because it makes percentage calcs work
 		for(uint i = 0; i < allMedals.Length; i++) {
-			if (allMedals[i].medalId != -1 || settings_showUnfinished) {
+			if (allMedals[i].medalId != UNFINISHED_MEDAL_ID || settings_showUnfinished) {
 				totalMedals += allMedals[i].count;
 			}
 		}
@@ -92,7 +99,7 @@ void displayUI() {
 		for(uint i = 0; i < allMedals.Length; i++) {
 			int medalId = allMedals[i].medalId;
 
-			if (!settings_showUnfinished && medalId == -1) {
+			if (!settings_showUnfinished && medalId == UNFINISHED_MEDAL_ID) {
 				continue;
 			}
 

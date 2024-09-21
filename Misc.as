@@ -57,7 +57,7 @@ string getFromUrl(string &in url) {
     }
 
     if (mapReq.ResponseCode() != 200) {
-        log("Trackmania API might be broken " + mapReq.ResponseCode() + ". Response was " + mapReq.Body);
+        log("Trackmania API might be broken. Status: " + mapReq.ResponseCode() + ". Response was: " + mapReq.Body);
         throw("Unable to fetch " + url);
     }
 
