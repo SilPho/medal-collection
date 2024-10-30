@@ -5,6 +5,7 @@ class MedalCount {
 	string color;
     array<float> buttonHsv;
     string tooltipSuffix;
+    bool isVisible;
 
 	MedalCount(int medalId, const string &in name="", const string &in color="$000", array<float> buttonHsv = { 0, 1, 1 }, const string &in tooltipSuffix = ""){
         this.medalId = medalId;
@@ -13,34 +14,69 @@ class MedalCount {
 		this.color = color;
         this.buttonHsv = buttonHsv;
         this.tooltipSuffix = tooltipSuffix;
+        this.isVisible = false; // This will be set by getPlayerZones() on first boot
 	}
 }
 
+enum RecordType { LEADERBOARD, MEDAL };
+
 // The value of these is important - "Better" medals need higher numbers
+const int WORLD_ID = 100;
+const int CONTINENT_ID = 90;
+const int TERRITORY_ID = 80;
+const int REGION_ID = 70;
+const int DISTRICT_ID = 60;
+
+const int CHAMPION_MEDAL_ID = 20; // Maybe coming soon
 const int WARRIOR_MEDAL_ID = 10;
 const int AUTHOR_MEDAL_ID = 4; // This has to match what Nadeo uses (same for Gold, etc)
+const int GOLD_MEDAL_ID = 3;
+const int SILVER_MEDAL_ID = 2;
+const int BRONZE_MEDAL_ID = 1;
+const int FINISHED_MEDAL_ID = 0; // Not really a "medal" but that name will do
 const int UNFINISHED_MEDAL_ID = -1;
 const int NO_MEDAL_ID = -99;
 
-// This is where we keep the really important numbers
-auto warrior = MedalCount(WARRIOR_MEDAL_ID, "Warrior", "\\$000", { 0.34, 1, 0.47 }, "you earned a Warrior medal on");
-auto author = MedalCount(AUTHOR_MEDAL_ID, "Author", "\\$071", { 0.34, 1, 0.47 }, "you earned an Author medal on");
-auto gold = MedalCount(3, "Gold", "\\$db4", { 0.13, 0.70, 0.87}, "you earned a Gold medal on");
-auto silver = MedalCount(2, "Silver", "\\$899", { 0.5, 0.11, 0.60}, "you earned a Silver medal on");
-auto bronze = MedalCount(1, "Bronze", "\\$964", { 0.06, 0.57, 0.6}, "you earned a Bronze medal on");
-auto finishes = MedalCount(0, "Finished", "\\$aaf", { 0.66, 0.32, 0.96}, "you have finished but didn't get a medal on");
-auto unfinished = MedalCount(UNFINISHED_MEDAL_ID, "Played", "\\$ccc", { 0.5, 0.11, 0.60}, "you have played but not finished yet" );
+// Create holders for each different type of record and medal
+auto world = MedalCount(WORLD_ID, "World", "\\$333", { 0, 0, 0.2 }, "that you have the World Record on");
+auto continent = MedalCount(CONTINENT_ID, "Continent", "\\$c11", { 0, 0.9, 0.7}, "that you have the Continental on");
+auto territory = MedalCount(TERRITORY_ID, "Territory", "\\$35e", { 0.63, 0.8, 0.9}, "that you hold the National record on");
+auto region = MedalCount(REGION_ID, "Region", "\\$3b6", { 0.4, 0.7, 0.7}, "that you have the Regional record on");
+auto district = MedalCount(DISTRICT_ID, "District", "\\$bbb", { 1, 0, 0.7}, "that you have the Local District record on");
 
-// The order these are added will be the order they are displayed to the user
-array<MedalCount@> allMedals = {author, gold, silver, bronze, finishes, unfinished };
+auto champion = MedalCount(CHAMPION_MEDAL_ID, "Champion", "\\$701", { 0.34, 1, 0.47 }, "that you earned a Champion medal on");
+auto warrior = MedalCount(WARRIOR_MEDAL_ID, "Warrior", "\\$000", { 0.34, 1, 0.47 }, "that you earned a Warrior medal on");
+auto author = MedalCount(AUTHOR_MEDAL_ID, "Author", "\\$071", { 0.34, 1, 0.47 }, "that you earned an Author medal on");
+auto gold = MedalCount(GOLD_MEDAL_ID, "Gold", "\\$db4", { 0.13, 0.70, 0.87}, "that you earned a Gold medal on");
+auto silver = MedalCount(SILVER_MEDAL_ID, "Silver", "\\$899", { 0.5, 0.11, 0.60}, "that you earned a Silver medal on");
+auto bronze = MedalCount(BRONZE_MEDAL_ID, "Bronze", "\\$964", { 0.06, 0.57, 0.6}, "that you earned a Bronze medal on");
+auto finishes = MedalCount(FINISHED_MEDAL_ID, "Finished", "\\$aaf", { 0.66, 0.32, 0.96}, "that you have finished but didn't get a medal on");
+auto unfinished = MedalCount(UNFINISHED_MEDAL_ID, "Played", "\\$ccc", { 0.5, 0.11, 0.60}, "that you have played but not finished yet" );
 
-// Mapping of mapUid to medalId
-dictionary mapDict;
+// This is what gets shown in the UI - The order is important
+array<MedalCount@> leaderboardRecords = { world, continent, territory, region, district };
+array<MedalCount@> medalRecords = { author, gold, silver, bronze, finishes, unfinished };
 
-// Mapping of medals to mapUid[]
-dictionary medalDict;
+// This is for internal use. The order is not important
+array<MedalCount@> allRecords = {champion, warrior, author, gold, silver, bronze, finishes, unfinished, world, continent, territory, region, district };
+
+// Mapping of mapId to medalId (not leaderboards)
+dictionary mapMedalDict;
+
+// Mapping of mapId to leaderboardId
+dictionary mapLeaderboardDict;
+
+// Mapping of medals to mapUid[] (Includes medal and leaderboard pools)
+dictionary randomMapPools;
+
+bool isInitialised = false;
 
 void initialiseStorage() {
+    // Make sure you don't accidentally do this twice
+    if (isInitialised) {
+        return;
+    }
+
 #if DEPENDENCY_WARRIORMEDALS
     // Since the WarriorMedals plugin provides an interface for fetching colours, might as well use it
     warrior.color = WarriorMedals::GetColorStr();
@@ -48,81 +84,136 @@ void initialiseStorage() {
     v = UI::ToHSV(v.x, v.y, v.z);
     warrior.buttonHsv = { v.x, v.y, v.z };
 
-    allMedals.InsertAt(0, warrior);
+    medalRecords.InsertAt(0, warrior);
 #endif
 
-    print('Storage is good to go');
+    startnew(asyncInitialise);
+}
+
+void asyncInitialise() {
+    getPlayerZones();
+
+    // Now that we know which learderboards we can show, we can turn on the medal display too (avoids jumping UI)
+    for(uint j = 0; j < medalRecords.Length; j++) {
+        medalRecords[j].isVisible = true;
+    }
+
+    isInitialised = true;
+    log("Medal Collection storage is initialised");
 }
 
 // Updates the save data if required. Returns true if a change is made, false otherwise
-bool updateSaveData(const string &in mapId, int bestMedal, bool suppressWriting = false) {
-    int currentMedal = int(mapDict[mapId]);
+bool updateSaveData(const string &in mapId, int bestMedal, RecordType recordType, bool suppressWriting = false) {
+    dictionary@ sourceDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
+    int currentMedal;
+    sourceDict.Get(mapId, currentMedal);
     bool improvedMedal = currentMedal < bestMedal;
-    bool hadMedalAlready = mapDict.Exists(mapId);
+    bool hadMedalAlready = sourceDict.Exists(mapId);
 
     if (hadMedalAlready && !improvedMedal) {
         return false;
     }
 
-    log("This is either a new medal: " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + currentMedal + "/" + bestMedal + ")");
-    forceUpdateSaveDataa(mapId, bestMedal, suppressWriting);
+    log("This is either a new medal: " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + bestMedal + " > " + currentMedal + ")");
+    forceUpdateSaveDataa(mapId, recordType, bestMedal, suppressWriting);
     return true;
 }
 
-void forceUpdateSaveDataa(const string &in mapId, int bestMedal, bool suppressWriting = false) {
-    bool hadMedalAlready = mapDict.Exists(mapId);
-    int currentMedal = int(mapDict[mapId]);
+void forceUpdateSaveDataa(const string &in mapId, RecordType recordType, int bestMedal, bool suppressWriting = false) {
+    dictionary@ targetDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
 
-    for(uint i=0; i < allMedals.Length; i++){
-        if (allMedals[i].medalId == bestMedal) {
-            print("New record on " + mapId + ". Medal earned: " + allMedals[i].name);
+    // log("Target dict has " + targetDict.GetSize() + " entries in it already");
+    bool hadMedalAlready = targetDict.Exists(mapId);
+    int currentMedal = int(targetDict[mapId]);
+
+    for(uint i=0; i < allRecords.Length; i++) {
+        if (allRecords[i].medalId == bestMedal) {
+            print("Storing record on " + mapId + ". Medal earned: " + allRecords[i].name);
             // Increase count for new medal type
-            allMedals[i].count++;
+            allRecords[i].count++;
             getMapPool(bestMedal).InsertLast(mapId);
         }
-        if (hadMedalAlready && allMedals[i].medalId == currentMedal) {
+        if (hadMedalAlready && allRecords[i].medalId == currentMedal) {
             // Since there was an old medal, better remove that first
-            log("Removing old medal: " + allMedals[i].name);
-            allMedals[i].count--;
+            log("Removing old medal: " + allRecords[i].name);
+            allRecords[i].count--;
 
             // Also need to remove it from the random map pool
             deleteFromMapPool(mapId, currentMedal);
         }
     }
-    mapDict.Set(mapId, bestMedal);
+
+    if (bestMedal == NO_MEDAL_ID) {
+        targetDict.Delete(mapId);
+    }
+    else {
+        targetDict.Set(mapId, bestMedal);
+    }
 
     if (!suppressWriting) {
-        writeSingleStorageFile(mapId);
+        writeSingleStorageFile(mapId, recordType);
     }
 }
 
 array<string> getMapPool(int medalId) {
-    return cast<array<string>>(medalDict["" + medalId]);
+    if (randomMapPools.Exists("" + medalId)) {
+        return cast<array<string>>(randomMapPools["" + medalId]);
+    }
+
+    warn("Tried to open an invalid map pool: " + medalId);
+    return {};
+}
+
+array<string> truncateMapPool(int medalId) {
+    randomMapPools.Set("" + medalId, array<string>(0));
+    return getMapPool(medalId);
+}
+
+    // Note that this doesn't reset the pool before iterating through it
+    array<string> getMapPoolsAtOrAbove(int minMedalId, RecordType recordType) {
+    array<string> combinedPool = {};
+
+    array<MedalCount@>@ sourceList = recordType == RecordType::LEADERBOARD ? leaderboardRecords : medalRecords;
+
+    for(uint i=0; i < sourceList.Length; i++) {
+        int currentMedalId = sourceList[i].medalId;
+        if (currentMedalId >= minMedalId) {
+            rebuildMapPool(currentMedalId);
+            // auto validPool = cast<array<string>>(randomMapPools["" + currentMedalId]);
+            auto validPool = getMapPool(currentMedalId);
+            combinedPool.InsertAt(0, validPool);
+            log("Added " + validPool.Length + " " + sourceList[i].name + " medals to combined list (" + currentMedalId + " vs " + minMedalId + " vs " + AUTHOR_MEDAL_ID + ")");
+        }
+    }
+
+    return combinedPool;
 }
 
 /**
  * Permanently remove a map from storage (Designed for recovering from software bugs rather than expecting players to lose medals)
  */
-void deleteMapFromStorage(const string &in mapId) {
+void deleteMapFromStorage(const string &in mapId, RecordType recordType) {
+    dictionary@ sourceDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
+
     log("Deleting mapID (" + mapId + ") from storage");
     int previousMedal = NO_MEDAL_ID; // Temp value
-    mapDict.Get(mapId, previousMedal);
+    sourceDict.Get(mapId, previousMedal);
 
     if (previousMedal == NO_MEDAL_ID) {
-        warn("Tried to remove a map that doesn't seem to exist: " + mapId);
+        // Gracefully ignore the case where it can't be found
         return;
     }
 
     // Lower the current visible medal count (Superficial)
-    for(uint i=0; i < allMedals.Length; i++){
-        if (allMedals[i].medalId == previousMedal) {
-            allMedals[i].count--;
+    for(uint i=0; i < allRecords.Length; i++){
+        if (allRecords[i].medalId == previousMedal) {
+            allRecords[i].count--;
         }
     }
 
     // Actually delete the map from the permanent record
-    mapDict.Delete(mapId);
-    writeSingleStorageFile(mapId);
+    sourceDict.Delete(mapId);
+    writeSingleStorageFile(mapId, recordType);
 }
 
 /**
@@ -141,54 +232,59 @@ void deleteFromMapPool(const string &in mapUid, int currentMedal) {
 }
 
 /*
- * Scans every medal from every map to find ones that you have a certain medal on. Should be used sparingly
+ * Scans every medal from every map to find ones that you have a certain medal on
  * This is usually used when the random map button has run out of options and needs to cycle round again
+ * But is also used when we need the entire pool for a certain medal, and not one that might have some randomly removed
  */
 void rebuildMapPool(int medalIdForEmptyPool) {
-    // Empty the list, if it wasn't already
-    medalDict.Set("" + medalIdForEmptyPool, array<string>(0));
-    auto mapPool = getMapPool(medalIdForEmptyPool);
+    auto mapPool = truncateMapPool(medalIdForEmptyPool);
 
-    auto allMaps = mapDict.GetKeys();
+    dictionary@ sourceDict = medalIdForEmptyPool >= DISTRICT_ID ? mapLeaderboardDict : mapMedalDict;
+
+    auto allMaps = sourceDict.GetKeys();
+
     for (uint i=0; i < allMaps.Length; i++) {
         int medalEarned;
-        mapDict.Get(allMaps[i], medalEarned);
+        sourceDict.Get(allMaps[i], medalEarned);
         if (medalEarned == medalIdForEmptyPool) {
             mapPool.InsertLast(allMaps[i]);
         }
     }
 
-    log("Map pool rebuilt: Has "+ mapPool.Length + " maps in it again");
+    log("Map pool #" + medalIdForEmptyPool + " rebuilt: Has "+ mapPool.Length + " maps in it again (Sanity: " + getMapPool(medalIdForEmptyPool).Length + ")");
 }
 
 /*
  * Returns something like "medalCollection_a.json" for all of the mapUids starting with a.
  * Similarly, will return "medalCollection_aa.json" for mapUids starting with a capital A.
  */
-string getFileLocation(string &in fileSuffix) {
+string getFileLocation(string &in fileSuffix, RecordType recordType) {
     // Turns capitals into doubles. Eg: G into gg
     string id = "" + fileSuffix.ToLower() + ((fileSuffix.ToLower() == fileSuffix) ? "" : fileSuffix.ToLower());
-    return IO::FromStorageFolder("medalCollection_" + id + ".json");
+    string prefix = recordType == RecordType::MEDAL ? "medalCollection_" : "recordCollection_";
+    return IO::FromStorageFolder(prefix + id + ".json");
 }
 
-void writeSingleStorageFile(string &in mapId) {
+void writeSingleStorageFile(string &in mapId, RecordType recordType) {
+    dictionary@ sourceDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
+
     // Temp dictionary just contains maps that start with the same letter as the given mapId
     dictionary alphaDict;
     string char = mapId.SubStr(0, 1);
-    auto allMaps = mapDict.GetKeys();
+    auto allMaps = sourceDict.GetKeys();
     for (uint i=0; i < allMaps.Length; i++) {
         if (allMaps[i].StartsWith(char)) {
             int medalEarned;
-            mapDict.Get(allMaps[i], medalEarned);
+            sourceDict.Get(allMaps[i], medalEarned);
             alphaDict.Set(allMaps[i], medalEarned);
         }
     }
 
-    writeDictionaryToFile(char, alphaDict);
+    writeDictionaryToFile(char, alphaDict, recordType);
 }
 
-void writeDictionaryToFile(string &in char, dictionary alphaDict) {
-    string jsonFileLocation = getFileLocation(char);
+void writeDictionaryToFile(string &in char, dictionary alphaDict, RecordType recordType) {
+    string jsonFileLocation = getFileLocation(char, recordType);
 
     auto content = Json::Object();
     content["maps"] = alphaDict.ToJson();
@@ -199,13 +295,15 @@ void writeDictionaryToFile(string &in char, dictionary alphaDict) {
 }
 
 // Honestly, this entire function feels really clunky and awkward - It does work, but I'm sure there's a cleaner way to write it
-void writeAllStorageFiles() {
+void writeAllStorageFiles(RecordType recordType) {
+    dictionary@ sourceDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
+
     dictionary alphaDict; // Dictionary of dictionaries
 
     log("About to write all storage files");
 
     // Part 1: Read the known list and group them into buckets
-    auto allMaps = mapDict.GetKeys();
+    auto allMaps = sourceDict.GetKeys();
     for (uint i=0; i < allMaps.Length; i++) {
         string mapId = allMaps[i];
         string char = mapId.SubStr(0, 1);
@@ -213,11 +311,10 @@ void writeAllStorageFiles() {
             dictionary emptyDict;
             alphaDict.Set(char, emptyDict);
         }
-        dictionary letterDict;
 
         auto dictForThisLetter = cast<dictionary>(alphaDict[char]);
         int medalEarned;
-        mapDict.Get(allMaps[i], medalEarned);
+        sourceDict.Get(allMaps[i], medalEarned);
         dictForThisLetter.Set(mapId, medalEarned);
     }
 
@@ -227,12 +324,11 @@ void writeAllStorageFiles() {
     auto allLetters = alphaDict.GetKeys();
     for (uint i=0; i < allLetters.Length; i++) {
         string char = allLetters[i].SubStr(0, 1);
-        auto content = Json::Object();
 
         dictionary dictForThisLetter;
         alphaDict.Get(char, dictForThisLetter);
 
-        writeDictionaryToFile(char, dictForThisLetter);
+        writeDictionaryToFile(char, dictForThisLetter, recordType);
         yield();
     }
 }
@@ -242,9 +338,12 @@ void writeAllStorageFiles() {
  * Returns the number of successfully read files, so that you can check, for example, if 0 files were found
  */
 int readStorageFiles() {
-    // Reset the storage data
-    for(uint i=0; i < allMedals.Length; i++) {
-        medalDict.Set("" + allMedals[i].medalId, array<string>(0));
+    // On first load we need to do some checks
+    initialiseStorage();
+
+    // Reset the storage data (This is the first time it gets initialised)
+    for(uint i=0; i < allRecords.Length; i++) {
+        truncateMapPool(allRecords[i].medalId);
     }
 
     string rootPath = IO::FromStorageFolder("");
@@ -254,55 +353,69 @@ int readStorageFiles() {
     int numCollectionsFound = 0;
     for(uint i=0; i < existingFiles.Length; i++){
         string fileName = existingFiles[i];
-        if (fileName.Contains("/medalCollection_") && fileName.EndsWith('.json')) {
-            readStorageFile(fileName);
-            numCollectionsFound++;
+        if (fileName.EndsWith('.json')) {
+            // log("Attempting to read " + fileName);
+            if (fileName.Contains("/recordCollection_") || fileName.Contains("/medalCollection_")) {
+                readStorageFile(fileName);
+                numCollectionsFound++;
+            }
             yield();
         }
     }
 
     // Log the output (for development's sake)
-    for(uint i=0; i < allMedals.Length; i++){
-        log("Final number of " + allMedals[i].color + allMedals[i].name + "\\$g medals: " + allMedals[i].count);
+    for(uint i=0; i < allRecords.Length; i++){
+        print("Current number of " + allRecords[i].color + allRecords[i].name + "\\$g medals: " + allRecords[i].count);
     }
+
+    log("Medal map size: " + mapMedalDict.GetSize());
+    log("Leaderboard map size: " + mapLeaderboardDict.GetSize());
 
     return numCollectionsFound;
 }
 
 void readStorageFile(string &in jsonFile) {
     if (IO::FileExists(jsonFile)) {
-        auto content = Json::FromFile(jsonFile);
-        dictionary tempMedals;
+        //try {
+            auto content = Json::FromFile(jsonFile);
+            dictionary tempMedals;
 
-        for(uint i=0; i < allMedals.Length; i++){
-            tempMedals.Set("" + allMedals[i].medalId, 0);
-        }
-
-        auto mapList = content.Get("maps");
-
-        // Quick guard to ensure the maps object exists in the file
-        if (mapList.GetType() != 0) {
-            auto allIds = mapList.GetKeys();
-            for(uint i=0; i < allIds.Length; i++) {
-                auto medalEarned = int(mapList.Get("" + allIds[i]));
-#if !DEPENDENCY_WARRIORMEDALS
-                // If the Warrior plugin was uninstalled then just revert to Author
-                if (medalEarned == WARRIOR_MEDAL_ID) {
-                    medalEarned = AUTHOR_MEDAL_ID;
-                }
-#endif
-                mapDict.Set(allIds[i], medalEarned);
-                auto newTotal = int(tempMedals["" + medalEarned]) + 1;
-                tempMedals.Set("" + medalEarned, newTotal);
-
-                // Add mapId to the per-medal list
-                getMapPool(medalEarned).InsertLast(allIds[i]);
+            for(uint i=0; i < allRecords.Length; i++){
+                tempMedals.Set("" + allRecords[i].medalId, 0);
             }
-        }
 
-        // Add the results to the existing values
-        for(uint i=0; i < allMedals.Length; i++){
-            allMedals[i].count += int(tempMedals["" + allMedals[i].medalId]);
-        }
+            auto mapList = content.Get("maps");
+
+            dictionary@ sourceDict = jsonFile.Contains('recordCollection') ? mapLeaderboardDict : mapMedalDict;
+
+            // Quick guard to ensure the maps object exists in the file
+            if (!(mapList is null) && mapList.GetType() != 0) {
+                auto allIds = mapList.GetKeys();
+                for(uint i=0; i < allIds.Length; i++) {
+                    auto medalEarned = int(mapList.Get("" + allIds[i]));
+#if !DEPENDENCY_WARRIORMEDALS
+                    // If the Warrior plugin was uninstalled then just revert to Author
+                    if (medalEarned == WARRIOR_MEDAL_ID) {
+                        medalEarned = AUTHOR_MEDAL_ID;
+                    }
+#endif
+                    sourceDict.Set(allIds[i], medalEarned);
+
+                    auto newTotal = int(tempMedals["" + medalEarned]) + 1;
+                    tempMedals.Set("" + medalEarned, newTotal);
+
+                    // Add mapId to the per-medal list
+                    getMapPool(medalEarned).InsertLast(allIds[i]);
+                }
+            }
+
+            // Add the results to the existing values
+            for(uint i=0; i < allRecords.Length; i++){
+                allRecords[i].count += int(tempMedals["" + allRecords[i].medalId]);
+            }
+        // }
+        // catch {
+        //     warn("Unable to read from " + jsonFile + ". " + getExceptionInfo());
+        // }
     }
 }

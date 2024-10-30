@@ -8,9 +8,22 @@ string getCurrentMapId() {
 	return "";
 }
 
-// For now I'm assuming that only TM_Race is a valid map type
+// We could just accept anything that isn't Royal, but it's safer to be explicit
 bool isValidMapType(const string &in mapType) {
-    return mapType == "TrackMania\\TM_Race" || mapType == "TrackMania\\TM_Stunt";
+    return mapType == "TrackMania\\TM_Race" || mapType == "TrackMania\\TM_Stunt" || mapType == "TrackMania\\TM_Platform";
+}
+
+string getGameMode(const string &in mapType) {
+    if (!isValidMapType(mapType)) {
+        return "";
+    }
+    if (mapType == "TrackMania\\TM_Stunt") {
+        return "Stunt";
+    }
+    if (mapType == "TrackMania\\TM_Platform") {
+        return "Platform";
+    }
+    return "TimeAttack";
 }
 
 bool isPlayerInGame() {
@@ -34,11 +47,13 @@ void waitForNadeoAuthentication() {
     while (!NadeoServices::IsAuthenticated("NadeoServices")) {
         yield();
     }
-    // Looks like we don't need the Live endpoint after all
-    // log("Nadeo authentication in progress");
-    // while (!NadeoServices::IsAuthenticated("NadeoLiveServices")) {
-    //     yield();
-    // }
+
+    // Live endpoint required for leaderboard checks
+    log("Checking Live Nadeo authentication");
+    while (!NadeoServices::IsAuthenticated("NadeoLiveServices")) {
+        yield();
+    }
+
     log("Nadeo authentication confirmed");
 }
 
@@ -49,8 +64,9 @@ string getMapSearchUrl(bool useMapUidEndpoint = false) {
 string getFromUrl(string &in url) {
 	waitForNadeoAuthentication();
 
-    log("About to query: " + url);
-    Net::HttpRequest@ mapReq = NadeoServices::Get("NadeoServices", url);
+    log("\\$0afAbout to GET: " + url);
+    auto audience = url.Contains(NadeoServices::BaseURLCore()) ? "NadeoServices" : "NadeoLiveServices";
+    Net::HttpRequest@ mapReq = NadeoServices::Get(audience, url);
     mapReq.Start();
     while (!mapReq.Finished()) {
         yield();
@@ -61,5 +77,26 @@ string getFromUrl(string &in url) {
         throw("Unable to fetch " + url);
     }
 
+    // Maybe consider if you can pre-parse this response into a Json
     return mapReq.String();
+}
+
+string postToUrl(string &in url, Json::Value content) {
+    waitForNadeoAuthentication();
+
+    log("\\$0afAbout to POST: " + url);
+    auto audience = url.Contains(NadeoServices::BaseURLCore()) ? "NadeoServices" : "NadeoLiveServices";
+    Net::HttpRequest@ request = NadeoServices::Post(audience, url, Json::Write(content));
+    request.Start();
+
+    while (!request.Finished()) {
+        yield();
+    }
+
+    if (request.ResponseCode() != 200) {
+        log("Trackmania API might be broken. Status: " + request.ResponseCode() + ". Response was: " + request.Body);
+        throw("Unable to fetch " + url);
+    }
+
+    return request.String();
 }

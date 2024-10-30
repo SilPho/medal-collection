@@ -1,7 +1,7 @@
 uint checkForPluginMedals(const string &in currentMapId, int bestTime) {
     int output = 0;
 #if DEPENDENCY_WARRIORMEDALS
-    log("Checking for Warrior medals");
+    // log("Checking for Warrior medals");
     int targetTime = WarriorMedals::GetWMTime(currentMapId);
     if (targetTime > 0 && bestTime <= targetTime) {
         log("You did it! You got the Warrior medal");
@@ -12,11 +12,11 @@ uint checkForPluginMedals(const string &in currentMapId, int bestTime) {
     return output;
 }
 
-void recheckWarriorRecords() {
+void checkWarriorRecords() {
 #if DEPENDENCY_WARRIORMEDALS
     startnew(getWarriorMedals);
 #else
-    print("Can't check Warrior medals - Dependency not installed");
+    log("Can't check Warrior medals - Dependency not installed");
 #endif
 }
 
@@ -32,7 +32,7 @@ void getWarriorMedals() {
         auto warriorResult = cast<WarriorMedals::Map>(warriorData[mapUid]);
 
         if (warriorResult.get_hasWarrior()) {
-            bool newInformation = updateSaveData(mapUid, WARRIOR_MEDAL_ID, true);
+            bool newInformation = updateSaveData(mapUid, WARRIOR_MEDAL_ID, RecordType::MEDAL, true);
             didSomethingChange = didSomethingChange || newInformation;
         }
     }
@@ -40,7 +40,7 @@ void getWarriorMedals() {
 
     if (didSomethingChange) {
         print("One or more 3rd-party plugins changed something. Re-saving the data");
-        writeAllStorageFiles();
+        writeAllStorageFiles(RecordType::MEDAL);
     }
     else {
         print("Warrior medals are unchanged. No save required");

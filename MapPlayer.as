@@ -50,7 +50,8 @@ void getMapDetails() {
     else if (!isValidMapType(mapType)) {
         // Invalid map type found - Somehow some dodgy data got into the Storage
         nextRandomMap.mapName = "Oops, " + mapName + "$g is a " + mapType + " map. Removed it from your collection to keep things tidy";
-        deleteMapFromStorage(nextRandomMap.mapUid);
+        deleteMapFromStorage(nextRandomMap.mapUid, RecordType::LEADERBOARD);
+        deleteMapFromStorage(nextRandomMap.mapUid, RecordType::MEDAL);
 
         // We don't need to remove it from the random map pool because it was already removed when it was randomly chosen
     }

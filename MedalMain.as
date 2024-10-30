@@ -1,16 +1,18 @@
 // Your completion time on a track is this by default
-uint MAX_INT = 4294967295;
+const uint MAX_INT = 4294967295;
 
 bool showUI = false;
 string currentMapId = "";
 int currentMapMedal = NO_MEDAL_ID;
+int currentMapLeaderboardId = NO_MEDAL_ID;
+int currentBestTimeOrScore = MAX_INT;
+dictionary mapsToCheckLater = {};
 
 void Main() {
+    auto startedMs = Time::get_Now();
     // Set up HTTP access for downloading records
     NadeoServices::AddAudience("NadeoServices");
-
-    // Prepare the Storage class - It needs to check for some dependency stuff
-    initialiseStorage();
+    NadeoServices::AddAudience("NadeoLiveServices");
 
     // Load any previous data
     int filesRead = readStorageFiles();
@@ -18,17 +20,23 @@ void Main() {
     if (filesRead == 0) {
         print("No existing MedalCollection JSON files found - Assuming first installation");
         UI::ShowNotification("Medal Collection", "Thank you for installing the Medal Collection plugin. Fetching your past medals now...");
-        recheckNormalRecords();
-        recheckWarriorRecords(); // If plugin isn't installed, this returns quickly
+        checkAllNadeoRecords();
+        checkWarriorRecords(); // If plugin isn't installed, this returns quickly
     }
 
-    // Start a co-routine to watch for race-finish events
+    // Start a co-routine to watch for race-finish events (This runs indefinitely)
     startnew(checkForFinish);
 
-    // Finally, keep an eye out for newly loaded maps
+    // Start another one to keep an eye out for newly loaded maps (Also runs indefinitely)
     startnew(checkForMapLoad);
 
-    print("Medal Collection initialised");
+    // Double check the user's current leaderboard positions (Will terminate when it finishes)
+    startnew(doLeaderboardChecks);
+
+    // Check records again "later" in case the servers are busy, or when records change often in ToTD (Runs indefinitely, but sparsely)
+    startnew(recheckPreviousMaps);
+
+    print("Medal Collection initialised in " + (Time::get_Now() - startedMs) + " ms");
 }
 
 void checkForMapLoad() {
@@ -54,22 +62,41 @@ void checkForNewMap() {
 
     if (mapId != "" && mapId != currentMapId)
     {
-        log("Current MapId changed to " + mapId);
-        showUI = true;
+        log("\\$f0fCurrent MapId changed to " + mapId);
         currentMapId = mapId;
+        currentBestTimeOrScore = MAX_INT;
+        // checkAgainLater(currentMapId);
 
         // When loading a map, check to see if a medal was earned previously
         // For new maps this will trigger an "unfinished" medal to be saved
         // For maps you've played before, it's a sanity check
-        checkForEarnedMedal();
+        bool timeSet = checkForEarnedMedal();
+
+        // If a time has been set, it's possible that it could be some sort of regional record
+        if (timeSet) {
+            currentMapLeaderboardId = checkMapLeaderboard(currentMapId);
+        }
     }
 }
 
-// Returns true if a valid time was located
+int checkMapLeaderboard(const string &in mapId) {
+    int leaderboardId = getPlayerLeaderboardRecord(mapId);
+
+    log("Leaderboard status for " + mapId + " is " + leaderboardId);
+    updateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD);
+    return leaderboardId;
+}
+
+// Returns true if any valid time was located (not necessarily an improved time)
 bool checkForEarnedMedal() {
     auto network = cast<CTrackManiaNetwork>(GetApp().Network);
+    if (network is null || network.ClientManiaAppPlayground is null) {
+        warn("Tried to check for earned medals when outside of a playground");
+        return false;
+    }
     auto scoreMgr = network.ClientManiaAppPlayground.ScoreMgr;
     auto userMgr = network.ClientManiaAppPlayground.UserMgr;
+    auto map = GetApp().RootMap;
 
     MwId userId;
     if (userMgr.Users.Length > 0) {
@@ -78,32 +105,40 @@ bool checkForEarnedMedal() {
         userId.Value = uint(-1);
     }
 
+    const string gameMode = getGameMode(map.MapType);
+    if (gameMode == "") {
+        return false;
+    }
+
     // We don't really care about times, but it helps figure out the difference between played and finished
-    uint raceTime = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
-    uint stuntTime = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", "Stunt", "");
-    uint raceMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "TimeAttack", "");
-    uint stuntMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", "Stunt", "");
+    uint bestTime = scoreMgr.Map_GetRecord_v2(userId, currentMapId, "PersonalBest", "", gameMode, "");
 
-    log("Best medal is " + raceMedal + " or " + stuntMedal + ". Best time is " + raceTime + " or " + stuntTime);
+    // Cheaty way to make the math work out, because now "lower" scores are better for Stunt mode
+    if (gameMode == "Stunt") {
+        bestTime = -bestTime;
+    }
 
-    currentMapMedal = Math::Max(raceMedal, stuntMedal);
-    // Math::Min doesn't seem to work with MAX_INT, so we'll just check both times separately
+    currentMapMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", gameMode, "");
+
+    log("Map type: " + gameMode + ". Best medal is " + currentMapMedal + ". Best time (or score) is " + bestTime);
 
     // Game will return 0 for unfinished maps AND for times slower than bronze. Checking for a time will differentiate it
-    if (raceTime < MAX_INT || stuntTime < MAX_INT) {
-        log("Earned " + currentMapMedal);
-        int pluginMedal = checkForPluginMedals(currentMapId, raceTime);
+    if (bestTime < currentBestTimeOrScore) {
+        // log("Earned " + currentMapMedal);
+        int pluginMedal = checkForPluginMedals(currentMapId, bestTime);
         if (pluginMedal > currentMapMedal) {
             print("You've earned a third-party medal: " + pluginMedal);
             currentMapMedal = pluginMedal;
         }
-        updateSaveData(currentMapId, currentMapMedal);
+        updateSaveData(currentMapId, currentMapMedal, RecordType::MEDAL);
+        checkAgainLater(currentMapId);
+        checkMapLeaderboard(currentMapId);
         return true;
     }
 
     // If we don't have a race time, then the map hasn't been finished
     currentMapMedal = UNFINISHED_MEDAL_ID;
-    updateSaveData(currentMapId, UNFINISHED_MEDAL_ID);
+    updateSaveData(currentMapId, UNFINISHED_MEDAL_ID, RecordType::MEDAL);
     return false;
 }
 
@@ -133,30 +168,68 @@ void checkForFinish() {
             auto terminal = playground.GameTerminals[0];
             auto uiSequence = terminal.UISequence_Current;
 
-            bool stopChecking = true;
-
-            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::Finish) {
-                // If the time has yet to be registered, wait until next tick
-                // This works great for the first earned medal, but doesn't help for medal improvements
-                stopChecking = checkForEarnedMedal();
+            // On first load of a map, check again because sometimes it doesn't catch it on map switch
+            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::Intro) {
+                bool timeSet = checkForEarnedMedal();
+                if (timeSet && currentMapLeaderboardId == NO_MEDAL_ID) {
+                    currentMapLeaderboardId = checkMapLeaderboard(currentMapId);
+                }
             }
 
-            // If the new time wasn't ready when we did a check on finish, it might be ready during the EndRound sequence
-            // This should help catch medal improvements, but won't get triggered during Random Map Challenge
+            // Trigger when the player crosses the finish line
+            if (prevUiSequence != uiSequence && uiSequence == CGamePlaygroundUIConfig::EUISequence::Finish) {
+                // This sometimes isn't ready, which is why we check again later. But it's the only chance we have during Random Map Challenge
+                checkForEarnedMedal();
+            }
+
+            // If an improved time wasn't ready when we did a check on finish, it might be ready during the EndRound sequence
+            // This should help catch medal improvements, but won't get triggered during a Random Map Challenge
             if (prevUiSequence != uiSequence && (uiSequence == CGamePlaygroundUIConfig::EUISequence::EndRound || uiSequence == CGamePlaygroundUIConfig::EUISequence::UIInteraction)) {
                 checkForEarnedMedal();
             }
 
-            if (uiSequence != prevUiSequence && stopChecking) {
+            if (uiSequence != prevUiSequence) {
                 log("UI Sequence changed: " + uiSequence + ". Prev: " + prevUiSequence);
                 prevUiSequence = uiSequence;
             }
         }
         else if (playgroundLoaded == true) {
-            log("Played is heading back to main menu");
+            log("Player is heading back to main menu");
             playgroundLoaded = false;
             currentMapMedal = NO_MEDAL_ID;
+            currentMapLeaderboardId = NO_MEDAL_ID;
         }
         yield();
+    }
+}
+
+void checkAgainLater(const string &in mapId) {
+    mapsToCheckLater.Set(mapId, Time::Stamp + 60);
+}
+
+/*
+ * Sometimes it takes a while for records to filter through the back-end systems. This will keep things up to date
+ * This will wake periodically, but is only likely to make an API request once per minute at most
+ */
+void recheckPreviousMaps() {
+    while(true) {
+        sleep(10 * 1000); // 10 seconds between possible checks
+
+        auto keys = mapsToCheckLater.GetKeys();
+        int64 targetTime;
+        for (uint i = 0; i < keys.Length; i++) {
+            auto mapId = keys[i];
+            mapsToCheckLater.Get(mapId, targetTime);
+            if (targetTime < Time::Stamp) {
+                log("Time to re-check a previous map: " + mapId);
+                // checkForEarnedMedal(); - This won't work, it uses the current ScoreManager
+                int newLeaderboardState = checkMapLeaderboard(mapId);
+
+                if (mapId == currentMapId) {
+                    currentMapLeaderboardId = newLeaderboardState;
+                }
+                mapsToCheckLater.Delete(mapId);
+            }
+        }
     }
 }

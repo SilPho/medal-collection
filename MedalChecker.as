@@ -1,5 +1,4 @@
-void recheckNormalRecords() {
-    // Start on a new thread (ish)
+void checkAllNadeoRecords() {
     startnew(getMapMedals);
 }
 
@@ -12,7 +11,7 @@ void getMapMedals() {
     int numMedals = processMapIds(medalLookup);
 
     // Do this now, just in case anything goes wrong with checking other records
-    writeAllStorageFiles();
+    writeAllStorageFiles(RecordType::MEDAL);
 
     UI::ShowNotification("Medal Collection", "Medal Collection updated with " + numMedals + " medals!");
 }
@@ -88,7 +87,7 @@ void processBatch(string &in nadeoUrl, dictionary mapLookup) {
         int medal = int(mapLookup[mapId]);
 
         // log("About to check " + mapUid + " with medal " + medal);
-        updateSaveData(mapUid, medal, true);
+        updateSaveData(mapUid, medal, RecordType::MEDAL, true);
     }
 }
 

@@ -20,14 +20,13 @@ void RenderMenu() {
 
 		UI::Separator();
 
-
-		if(UI::MenuItem("Re-check ALL medals (May be slow)", "", false)) {
-			recheckNormalRecords();
+		if(UI::MenuItem("Re-check Nadeo medals (May take time)", "", false)) {
+			checkAllNadeoRecords();
 		}
 
 #if DEPENDENCY_WARRIORMEDALS
-		if(UI::MenuItem("Re-check Warrior medals", "", false)) {
-			recheckWarriorRecords();
+		if(UI::MenuItem("Re-check Warrior medals (Fast)", "", false)) {
+			checkWarriorRecords();
 		}
 #endif
 
@@ -71,119 +70,37 @@ void displayUI() {
 		}
 	}
 
-	int numMedals = allMedals.Length;
+	int numMedals = medalRecords.Length;
+	int numRecords = leaderboardRecords.Length;
+
 	if (!settings_showUnfinished) {
 		numMedals--;
 	}
 
-	int numColumns = (1
+	int numColumnsPerEntry = (1
 				+ (settings_showColours ? 1 : 0)
 				+ (settings_showNames ? 1 : 0)
 				+ (settings_showRandomiserButtons ? 1 : 0)
 				+ (settings_showPercentages && !settings_horizontalMode ? 1 : 0)
 				+ (settings_showTotals && !settings_horizontalMode ? 1 : 0)
 				+ (settings_showTotalPercentages && !settings_horizontalMode ? 1 : 0)
-			) * (settings_horizontalMode ? numMedals : 1);
+			);
 
-	if (UI::BeginTable("medalTable", numColumns)) {
+	int numMedalColumns = numColumnsPerEntry * (settings_horizontalMode ? numMedals : 1);
+	int numRecordColumns = numColumnsPerEntry * (settings_horizontalMode ? numRecords : 1);
+
+	if (settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0 && UI::BeginTable("recordTable", numRecordColumns)) {
+		insertRow(leaderboardRecords);
+		UI::EndTable();
+	}
+
+	if (settings_displayMode == DISPLAY_MODE_BOTH) {
+		UI::Separator();
+	}
+
+	if (settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::BeginTable("medalTable", numMedalColumns)) {
 		UI::TableNextRow();
-
-		int cumulative = 0;
-		float totalMedals = 0; // Using float because it makes percentage calcs work
-		for(uint i = 0; i < allMedals.Length; i++) {
-			if (allMedals[i].medalId != UNFINISHED_MEDAL_ID || settings_showUnfinished) {
-				totalMedals += allMedals[i].count;
-			}
-		}
-
-		for(uint i = 0; i < allMedals.Length; i++) {
-			int medalId = allMedals[i].medalId;
-
-			if (!settings_showUnfinished && medalId == UNFINISHED_MEDAL_ID) {
-				continue;
-			}
-
-			if (settings_showColours) {
-				UI::TableNextColumn();
-				UI::AlignTextToFramePadding();
-				UI::Text(allMedals[i].color + (medalId <= 0 ? Icons::CircleO : Icons::Circle));
-			}
-
-			if (settings_showRandomiserButtons) {
-				array<float> blackBg = { 0.0, 0.0, 0.0 };
-				auto buttonColour = settings_showColours ? blackBg : allMedals[i].buttonHsv;
-				UI::TableNextColumn();
-				UI::PushID("Improve" + medalId);
-				if (UI::ButtonColored(Icons::Random, buttonColour[0], buttonColour[1], buttonColour[2])) {
-					playRandomMap(medalId);
-				}
-				if (UI::IsItemHovered()) {
-					UI::BeginTooltip();
-					UI::Text("Click here to find a random map " + allMedals[i].tooltipSuffix);
-					UI::EndTooltip();
-				}
-				UI::PopID();
-			}
-
-			if (currentMapMedal == medalId) {
-				UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 0, 1));
-			}
-
-			if (settings_showNames) {
-				UI::TableNextColumn();
-				UI::AlignTextToFramePadding();
-				UI::Text(allMedals[i].name);
-			}
-
-			// Medal count
-			UI::TableNextColumn();
-			string countText = "";
-			cumulative += allMedals[i].count;
-			countText = "" + cumulative;
-			string medalCount = "" + allMedals[i].count;
-
-			float percent = totalMedals > 0 ? Math::Round(allMedals[i].count / totalMedals * 100) : 0;
-			float cumulativePercent = totalMedals > 0 ? Math::Round(cumulative / totalMedals * 100) : 0;
-			bool showCumulativePercent = settings_showTotalPercentages && cumulativePercent != 100 && (!settings_showPercentages || cumulative != allMedals[i].count);
-
-			if(settings_horizontalMode) {
-				if (settings_showPercentages) {
-					medalCount += " (" + percent + "%)";
-				}
-				if (settings_showTotals && cumulative != allMedals[i].count) {
-					medalCount += " [" + cumulative + "]";
-				}
-				if (showCumulativePercent) {
-					medalCount += " [" + cumulativePercent + "%]";
-				}
-
-				UI::Text(medalCount);
-			}
-			else {
-				UI::Text(medalCount);
-				if (settings_showPercentages) {
-					UI::TableNextColumn();
-					UI::Text("" + percent + "%");
-				}
-				if (settings_showTotals) {
-					UI::TableNextColumn();
-					UI::Text(cumulative != allMedals[i].count ? "" + cumulative + "" : "");
-				}
-				if (showCumulativePercent) {
-					UI::TableNextColumn();
-					UI::Text(cumulative != allMedals[i].count ? "" + cumulativePercent + "%" : "");
-				}
-			}
-
-			if (currentMapMedal == medalId) {
-				UI::PopStyleColor();
-			}
-
-			if (!settings_horizontalMode) {
-				UI::TableNextRow();
-			}
-		}
-
+		insertRow(medalRecords);
 		UI::EndTable();
 	}
 
@@ -194,7 +111,8 @@ void displayUI() {
 			UI::TableNextColumn();
 			UI::AlignTextToFramePadding();
 			if (!settings_horizontalMode) {
-				UI::PushTextWrapPos(numColumns * 50);
+				// Enforce some wrapping on the narrower vertical mode
+				UI::PushTextWrapPos(numColumnsPerEntry * 50);
 				UI::Text(Text::OpenplanetFormatCodes(nextRandomMap.mapName));
 				UI::PopTextWrapPos();
 			}
@@ -204,13 +122,132 @@ void displayUI() {
 			}
 
 			if (nextRandomMap.mapFileUrl != "") {
-
 				if (UI::Button("Play")) {
 					startnew(loadMap);
 				}
+				UI::SameLine();
+				UI::Dummy(vec2(5, 5));
+				UI::SameLine();
+			}
+
+			if (UI::ButtonColored("Hide", 0, 0, 0.2)) {
+				clearNextMap();
 			}
 			UI::EndTable();
 		}
 	}
 	UI::End();
+}
+
+void insertRow(array<MedalCount@> recordArray) {
+	int cumulative = 0;
+	float totalMedals = 0; // Using float because it makes percentage calcs work
+	for(uint i = 0; i < recordArray.Length; i++) {
+		if (recordArray[i].medalId != UNFINISHED_MEDAL_ID || settings_showUnfinished) {
+			totalMedals += recordArray[i].count;
+		}
+	}
+
+	for(uint i = 0; i < recordArray.Length; i++) {
+		if (!recordArray[i].isVisible) {
+			continue;
+		}
+
+		int medalId = recordArray[i].medalId;
+
+		if (!settings_showUnfinished && medalId == UNFINISHED_MEDAL_ID) {
+			continue;
+		}
+
+		// Show a coloured disk if the settings allow (or to replace a random button when the counter is at 0)
+		if (settings_showColours || (settings_showRandomiserButtons && recordArray[i].count == 0)) {
+			UI::TableNextColumn();
+			UI::AlignTextToFramePadding();
+			UI::Text(recordArray[i].color + (medalId <= 0 ? Icons::CircleO : Icons::Circle));
+		}
+
+		// Randomiser buttons (Only visible if there's something to play)
+		if (settings_showRandomiserButtons && recordArray[i].count > 0) {
+			array<float> blackBg = { 0.0, 0.0, 0.0 };
+			auto buttonColour = settings_showColours ? blackBg : recordArray[i].buttonHsv;
+			UI::TableNextColumn();
+			UI::PushID("Improve" + medalId);
+			if (UI::ButtonColored(Icons::Random, buttonColour[0], buttonColour[1], buttonColour[2])) {
+				playRandomMap(medalId);
+			}
+			if (UI::IsItemHovered()) {
+				UI::BeginTooltip();
+				UI::Text("Click here to find a random map " + recordArray[i].tooltipSuffix);
+				UI::EndTooltip();
+			}
+			UI::PopID();
+		}
+
+		// Fix a column alignment issue when a randomiser button is hidden but still needs to take up space
+		if (!settings_horizontalMode && settings_showColours && settings_showRandomiserButtons && recordArray[i].count == 0) {
+			UI::TableNextColumn();
+		}
+
+		bool shouldHighlightMedal = currentMapMedal == medalId || currentMapLeaderboardId == medalId;
+
+		if (shouldHighlightMedal) {
+			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 0, 1));
+		}
+
+		if (settings_showNames) {
+			UI::TableNextColumn();
+			UI::AlignTextToFramePadding();
+			UI::Text(recordArray[i].name);
+		}
+
+		// Medal count
+		UI::TableNextColumn();
+		string countText = "";
+		cumulative += recordArray[i].count;
+		countText = "" + cumulative;
+		string medalCount = "" + recordArray[i].count;
+
+		float percent = totalMedals > 0 ? Math::Round(recordArray[i].count / totalMedals * 100) : 0;
+		float cumulativePercent = totalMedals > 0 ? Math::Round(cumulative / totalMedals * 100) : 0;
+
+		// Only show cumulative if it is enabled and different to the regular perecentage if that's enabled too
+		bool showCumulativePercent = settings_showTotalPercentages && (!settings_showPercentages || cumulative != recordArray[i].count) && recordArray[i].medalId != UNFINISHED_MEDAL_ID;
+
+		if(settings_horizontalMode) {
+			if (settings_showPercentages) {
+				medalCount += " (" + percent + "%)";
+			}
+			if (settings_showTotals && cumulative != recordArray[i].count) {
+				medalCount += " [" + cumulative + "]";
+			}
+			if (showCumulativePercent && cumulativePercent > 0 && cumulativePercent != 100) {
+				medalCount += " [" + cumulativePercent + "%]";
+			}
+
+			UI::Text(medalCount);
+		}
+		else {
+			UI::Text(medalCount);
+			if (settings_showPercentages) {
+				UI::TableNextColumn();
+				UI::Text("" + percent + "%");
+			}
+			if (settings_showTotals) {
+				UI::TableNextColumn();
+				UI::Text(cumulative != recordArray[i].count ? "" + cumulative + "" : "");
+			}
+			if (showCumulativePercent) {
+				UI::TableNextColumn();
+				UI::Text(cumulativePercent > 0 ? "" + cumulativePercent + "%" : "");
+			}
+		}
+
+		if (shouldHighlightMedal) {
+			UI::PopStyleColor();
+		}
+
+		if (!settings_horizontalMode) {
+			UI::TableNextRow();
+		}
+	}
 }
