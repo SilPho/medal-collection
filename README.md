@@ -12,7 +12,7 @@ Wondering which tracks you only managed to get bronze on? Click the button next 
 You can get the plugin to recheck all of your medals, but I only recommend doing this if you've played on other devices or had the plugin disabled for a while. This is because medals aren't always updated immediately, so your counts can seemingly go down if you recheck too soon after playing a map.
 
 # Known Issues
-Royal Mode is not supported. You can't earn medals on a Royal map, so this isn't a big deal. Royal "training" maps work as normal. Stunt Mode should work fine though.
+Royal Mode is not supported. You can't earn medals on a Royal map, so this isn't a big deal. Royal "training" maps work as normal. Stunt and Platform Modes should work fine though.
 
 # Settings
 

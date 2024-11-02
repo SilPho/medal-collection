@@ -7,7 +7,7 @@ class NextRandomMap {
 
 NextRandomMap nextRandomMap = NextRandomMap();
 
-void clearNextMap() {
+void clearNextRandomMap() {
     nextRandomMap.mapName = "";
     nextRandomMap.mapFileUrl = "";
 }
@@ -94,5 +94,5 @@ void loadMap() {
     }
 
     app.ManiaTitleControlScriptAPI.PlayMap(nextRandomMap.mapFileUrl, "TrackMania/TM_PlayMap_Local", "");
-    clearNextMap();
+    clearNextRandomMap();
 }

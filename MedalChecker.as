@@ -22,14 +22,16 @@ dictionary getUserMedals() {
 
     string raceResponse = getFromUrl(url);
     string stuntResponse = getFromUrl(url + "?gameMode=Stunt");
+    string platformResponse = getFromUrl(url + "?gameMode=Platform");
 
     Json::Value raceResults = Json::Parse(raceResponse);
     Json::Value stuntResults = Json::Parse(stuntResponse);
-    log("Total number of medals found: " + (raceResults.Length + stuntResults.Length) + ". (" + raceResults.Length + " Race. " + stuntResults.Length + " Stunt)");
+    Json::Value platformResults = Json::Parse(platformResponse);
+    log("Total number of medals found: " + (raceResults.Length + stuntResults.Length + platformResults.Length) + ". (" + raceResults.Length + " Race. " + stuntResults.Length + " Stunt. " + platformResults.Length + " Platform)");
 
     dictionary mapLookup;
 
-    // There's probably a cleaner way to parse 2 lists, but this will do since they get aggregated together
+    // There's probably a DRYer way to parse these lists, but this will do
     for (uint i = 0; i < raceResults.Length; i++) {
         string mapId = string(raceResults[i]["mapId"]);
         int medal = int(raceResults[i]["medal"]);
@@ -38,6 +40,11 @@ dictionary getUserMedals() {
     for (uint i = 0; i < stuntResults.Length; i++) {
         string mapId = string(stuntResults[i]["mapId"]);
         int medal = int(stuntResults[i]["medal"]);
+        mapLookup[mapId] = medal;
+    }
+    for (uint i = 0; i < platformResults.Length; i++) {
+        string mapId = string(platformResults[i]["mapId"]);
+        int medal = int(platformResults[i]["medal"]);
         mapLookup[mapId] = medal;
     }
 
@@ -56,8 +63,9 @@ int processMapIds(dictionary mapLookup) {
         url += mapIds[i];
 
         if (i > 0 && i % batchSize == 0) {
-            log("Processing " + batchSize +" maps in batch " + (i / batchSize) + " of " + (mapIds.Length / batchSize));
+            log("Processing " + batchSize +" maps in batch " + (i / batchSize) + " of " + ((mapIds.Length / batchSize) + 1));
             processBatch(url, mapLookup);
+            sleep(500);
             uncheckedMaps = false;
             url = getMapSearchUrl();
         }

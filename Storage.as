@@ -6,6 +6,7 @@ class MedalCount {
     array<float> buttonHsv;
     string tooltipSuffix;
     bool isVisible;
+    bool rescanCompleted;
 
 	MedalCount(int medalId, const string &in name="", const string &in color="$000", array<float> buttonHsv = { 0, 1, 1 }, const string &in tooltipSuffix = ""){
         this.medalId = medalId;
@@ -15,6 +16,7 @@ class MedalCount {
         this.buttonHsv = buttonHsv;
         this.tooltipSuffix = tooltipSuffix;
         this.isVisible = false; // This will be set by getPlayerZones() on first boot
+        this.rescanCompleted = false; // This will be set by readCheckerStatus()
 	}
 }
 
@@ -84,6 +86,7 @@ void initialiseStorage() {
     v = UI::ToHSV(v.x, v.y, v.z);
     warrior.buttonHsv = { v.x, v.y, v.z };
 
+    // Add the warrior medal counter to the front of the list
     medalRecords.InsertAt(0, warrior);
 #endif
 
@@ -91,6 +94,7 @@ void initialiseStorage() {
 }
 
 void asyncInitialise() {
+    // Find the zones that this player is in (Sets names and visibility accordingly)
     getPlayerZones();
 
     // Now that we know which learderboards we can show, we can turn on the medal display too (avoids jumping UI)
@@ -103,38 +107,56 @@ void asyncInitialise() {
 }
 
 // Updates the save data if required. Returns true if a change is made, false otherwise
-bool updateSaveData(const string &in mapId, int bestMedal, RecordType recordType, bool suppressWriting = false) {
+bool updateSaveData(const string &in mapId, int newBestMedal, RecordType recordType, bool suppressWriting = false) {
     dictionary@ sourceDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
-    int currentMedal;
-    sourceDict.Get(mapId, currentMedal);
-    bool improvedMedal = currentMedal < bestMedal;
+    int oldCurrentMedal = NO_MEDAL_ID;
+    if (sourceDict.Exists(mapId)) {
+        sourceDict.Get(mapId, oldCurrentMedal);
+    }
+    bool improvedMedal = newBestMedal > oldCurrentMedal;
     bool hadMedalAlready = sourceDict.Exists(mapId);
 
-    if (hadMedalAlready && !improvedMedal) {
+    // Only save if we're improving medals (unlike forceUpdate which will remove them)
+    if ((hadMedalAlready && !improvedMedal) || (newBestMedal == NO_MEDAL_ID)) {
         return false;
     }
 
-    log("This is either a new medal: " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + bestMedal + " > " + currentMedal + ")");
-    forceUpdateSaveDataa(mapId, recordType, bestMedal, suppressWriting);
+    const string typeAsStr = recordType == RecordType::LEADERBOARD ? 'leaderboard record' : 'medal';
+
+    log("This is either a new " + typeAsStr + ": " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + newBestMedal + " > " + oldCurrentMedal + ")");
+    forceUpdateSaveData(mapId, newBestMedal, recordType, suppressWriting);
     return true;
 }
 
-void forceUpdateSaveDataa(const string &in mapId, RecordType recordType, int bestMedal, bool suppressWriting = false) {
+// Updates the save data even if the accomplishment is a downgrade. Makes no change if it matches what is already saved.
+bool forceUpdateSaveData(const string &in mapId, int bestMedal, RecordType recordType, bool suppressWriting = false) {
     dictionary@ targetDict = recordType == RecordType::LEADERBOARD ? mapLeaderboardDict : mapMedalDict;
 
     // log("Target dict has " + targetDict.GetSize() + " entries in it already");
     bool hadMedalAlready = targetDict.Exists(mapId);
-    int currentMedal = int(targetDict[mapId]);
+    int currentMedal = NO_MEDAL_ID;
+    if (hadMedalAlready) {
+        targetDict.Get(mapId, currentMedal);
+    }
 
+    // If you had something before and nothing has changed, or you didn't have anything and you still don't, we can end early
+    if ((hadMedalAlready && currentMedal == bestMedal) || (!hadMedalAlready && bestMedal == NO_MEDAL_ID)) {
+        log("Skip medal save - It's a match");
+        return false;
+    }
+
+    // Adjust the counters that are shown on screen (This is not what changes the files on disk)
     for(uint i=0; i < allRecords.Length; i++) {
+        // Increase count for new medal type (unless it's NO_MEDAL_ID, which is handled later)
         if (allRecords[i].medalId == bestMedal) {
             print("Storing record on " + mapId + ". Medal earned: " + allRecords[i].name);
-            // Increase count for new medal type
             allRecords[i].count++;
+
+            // Add the map to the random pool for this medal
             getMapPool(bestMedal).InsertLast(mapId);
         }
+        // If there was an old medal, better remove that to avoid duplicate counts
         if (hadMedalAlready && allRecords[i].medalId == currentMedal) {
-            // Since there was an old medal, better remove that first
             log("Removing old medal: " + allRecords[i].name);
             allRecords[i].count--;
 
@@ -143,7 +165,9 @@ void forceUpdateSaveDataa(const string &in mapId, RecordType recordType, int bes
         }
     }
 
+    // This is what changes the contents of the JSON files we'll write to disk later
     if (bestMedal == NO_MEDAL_ID) {
+        // Deleting from the dictionary will also prevent it being saved to the JSON file
         targetDict.Delete(mapId);
     }
     else {
@@ -153,6 +177,8 @@ void forceUpdateSaveDataa(const string &in mapId, RecordType recordType, int bes
     if (!suppressWriting) {
         writeSingleStorageFile(mapId, recordType);
     }
+
+    return true;
 }
 
 array<string> getMapPool(int medalId) {
@@ -291,7 +317,7 @@ void writeDictionaryToFile(string &in char, dictionary alphaDict, RecordType rec
 
     Json::ToFile(jsonFileLocation, content);
 
-    log("Medal collection written to " + jsonFileLocation + ". (" + alphaDict.GetKeys().Length + " medals)");
+    log("\\$f0fMedal collection written to " + jsonFileLocation + ". (" + alphaDict.GetKeys().Length + " medals)");
 }
 
 // Honestly, this entire function feels really clunky and awkward - It does work, but I'm sure there's a cleaner way to write it

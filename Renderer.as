@@ -20,15 +20,12 @@ void RenderMenu() {
 
 		UI::Separator();
 
-		if(UI::MenuItem("Re-check Nadeo medals (May take time)", "", false)) {
+		if(UI::MenuItem("Re-check Nadeo medals", "", false)) {
 			checkAllNadeoRecords();
 		}
 
-#if DEPENDENCY_WARRIORMEDALS
-		if(UI::MenuItem("Re-check Warrior medals (Fast)", "", false)) {
-			checkWarriorRecords();
-		}
-#endif
+		UI::Separator();
+		UI::Text("\\$999(Lots more options in Settings)");
 
 		UI::EndMenu();
 	}
@@ -64,8 +61,14 @@ void displayUI() {
 			UI::TableNextColumn();
 
 			auto app = cast<CTrackMania>(GetApp());
-			UI::Text("\\$888 " + app.LocalPlayerInfo.Name + "\\$888's Medal Collection");
-			// UI::Text("\\$888My Medal Collection");
+			string collectionName = "Medal Collection";
+			if (settings_displayMode == DISPLAY_MODE_LEADERBOARDS) {
+				collectionName = "Leaderboard Records";
+			}
+			else if (settings_displayMode == DISPLAY_MODE_BOTH) {
+				collectionName = "Records & Medals";
+			}
+			UI::Text("\\$888 " + app.LocalPlayerInfo.Name + "\\$888's " + collectionName);
 			UI::EndTable();
 		}
 	}
@@ -89,8 +92,15 @@ void displayUI() {
 	int numMedalColumns = numColumnsPerEntry * (settings_horizontalMode ? numMedals : 1);
 	int numRecordColumns = numColumnsPerEntry * (settings_horizontalMode ? numRecords : 1);
 
+	int totalMedals = 0; // Leaderboard records calculate their percentage based on total medals, not just leaderboard records
+	for(uint i = 0; i < medalRecords.Length; i++) {
+		if (medalRecords[i].medalId != UNFINISHED_MEDAL_ID || settings_showUnfinished) {
+			totalMedals += medalRecords[i].count;
+		}
+	}
+
 	if (settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0 && UI::BeginTable("recordTable", numRecordColumns)) {
-		insertRow(leaderboardRecords);
+		insertRow(leaderboardRecords, totalMedals);
 		UI::EndTable();
 	}
 
@@ -100,7 +110,7 @@ void displayUI() {
 
 	if (settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::BeginTable("medalTable", numMedalColumns)) {
 		UI::TableNextRow();
-		insertRow(medalRecords);
+		insertRow(medalRecords, totalMedals);
 		UI::EndTable();
 	}
 
@@ -131,7 +141,7 @@ void displayUI() {
 			}
 
 			if (UI::ButtonColored("Hide", 0, 0, 0.2)) {
-				clearNextMap();
+				clearNextRandomMap();
 			}
 			UI::EndTable();
 		}
@@ -139,14 +149,8 @@ void displayUI() {
 	UI::End();
 }
 
-void insertRow(array<MedalCount@> recordArray) {
+void insertRow(array<MedalCount@> recordArray, const int totalMedals) {
 	int cumulative = 0;
-	float totalMedals = 0; // Using float because it makes percentage calcs work
-	for(uint i = 0; i < recordArray.Length; i++) {
-		if (recordArray[i].medalId != UNFINISHED_MEDAL_ID || settings_showUnfinished) {
-			totalMedals += recordArray[i].count;
-		}
-	}
 
 	for(uint i = 0; i < recordArray.Length; i++) {
 		if (!recordArray[i].isVisible) {
@@ -207,8 +211,9 @@ void insertRow(array<MedalCount@> recordArray) {
 		countText = "" + cumulative;
 		string medalCount = "" + recordArray[i].count;
 
-		float percent = totalMedals > 0 ? Math::Round(recordArray[i].count / totalMedals * 100) : 0;
-		float cumulativePercent = totalMedals > 0 ? Math::Round(cumulative / totalMedals * 100) : 0;
+		// Use ceil because it prevents rounding to 0, which wouldn't be shown
+		float percent = totalMedals > 0 ? Math::Ceil(recordArray[i].count / float(totalMedals) * 100) : 0;
+		float cumulativePercent = totalMedals > 0 ? Math::Ceil(cumulative / float(totalMedals) * 100) : 0;
 
 		// Only show cumulative if it is enabled and different to the regular perecentage if that's enabled too
 		bool showCumulativePercent = settings_showTotalPercentages && (!settings_showPercentages || cumulative != recordArray[i].count) && recordArray[i].medalId != UNFINISHED_MEDAL_ID;
@@ -238,7 +243,7 @@ void insertRow(array<MedalCount@> recordArray) {
 			}
 			if (showCumulativePercent) {
 				UI::TableNextColumn();
-				UI::Text(cumulativePercent > 0 ? "" + cumulativePercent + "%" : "");
+				UI::Text((cumulativePercent > 0 && cumulativePercent < 100) ? "[" + cumulativePercent + "%]" : "");
 			}
 		}
 

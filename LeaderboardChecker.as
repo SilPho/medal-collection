@@ -1,25 +1,3 @@
-// class WorldRecord {
-// 	string playerId;
-// 	uint bestTime; // Most modes
-// 	uint bestScore; // Stunt mode
-
-//     WorldRecord() {
-//         // Empty constructor
-//     }
-
-// 	WorldRecord(const string &in playerId, const string &in gameMode, uint scoreOrTime){
-//         this.playerId = playerId;
-
-// 		if (gameMode == "TrackMania\\TM_Stunt") {
-//             this.bestScore = scoreOrTime;
-//         }
-//         else {
-//             // If new game modes are added in the future, time-based seems like the better default
-//             this.bestTime = scoreOrTime;
-//         }
-// 	}
-// }
-
 bool recordCheckInProgress = false;
 
 const int LEADERBOARD_RECORD_THROTTLE_MS = 2000; // Milliseconds to wait between Nadeo API calls
@@ -28,20 +6,17 @@ const dictionary ZONE_ORDER = {{"0", WORLD_ID}, {"1", CONTINENT_ID}, {"2", TERRI
 
 int64 heldCheckEnded = -1;
 
-bool authorCheckFinished = false;
-bool goldCheckFinished = false;
-bool silverCheckFinished = false;
-bool bronzeCheckFinished = false;
-bool noMedalsCheckFinished = false;
-
 const string checkerStatusFile = IO::FromStorageFolder('collection_status.json');
+
+string currentScanDescription = "";
 
 // --------------------------------------------------------
 
-// Fetch the player zone names from a Nadeo API and use that to rename the player zones
+// Fetch the player zone names from a Nadeo API and use that to rename the player zones and toggle their visibility
 void getPlayerZones() {
     try {
-        auto jsonToSend = Json::Parse("{ \"listPlayer\": [{ \"accountId\": \"" + GetApp().LocalPlayerInfo.WebServicesUserId + "\"}]}");
+        string accountId = GetApp().LocalPlayerInfo.WebServicesUserId;
+        auto jsonToSend = Json::Parse("{ \"listPlayer\": [{ \"accountId\": \"" + accountId + "\"}]}");
         auto zoneResponse = postToUrl(NadeoServices::BaseURLLive() + "/api/token/leaderboard/trophy/player", jsonToSend);
 
         Json::Value zoneDetails = Json::Parse(zoneResponse);
@@ -50,6 +25,8 @@ void getPlayerZones() {
         Json::Value zoneList = zoneDetails.Get("rankings")[0].Get("zones");
 
         int zoneId;
+
+        print("Your ID is " + accountId + ", and you are part of " + zoneList.Length + " regional zones");
 
         for (uint i = 0; i < zoneList.Length; i++) {
             string realName = string(zoneList[i].Get("zoneName"));
@@ -77,8 +54,11 @@ void doLeaderboardChecks() {
         recordCheckInProgress = true;
 
         try {
-            // Check to see which leaderboard scans have been run before (and when)
-            readCheckerStatus();
+            // Check to see which leaderboard scans have been run before
+            if (heldCheckEnded == -1) {
+                log("First check since game launch: Time to read previous status");
+                readCheckerStatus();
+            }
 
             // Check the user's medals to see if any of them are also leaderboard-topping records
             // After intial installation, this will probably return instantly
@@ -88,12 +68,9 @@ void doLeaderboardChecks() {
             if (isCheckRequired()) {
                 checkLeaderboardRecordsStillHeld();
             }
-            else {
-                // [TODO] Enable me again // log("The last leaderboard check ended recently (" + Time::FormatString("%c", heldCheckEnded) + ") Too early to do another one");
-                log("Too early to do another rescan");
-            }
         }
         catch {
+            // Catching the errors prevents the whole plugin from falling over (But we do lose stack info)
            warn("Problem during record check: " + getExceptionInfo());
         }
 
@@ -104,50 +81,22 @@ void doLeaderboardChecks() {
     }
 }
 
-void resetAllLeaderboardChecks() {
-    authorCheckFinished = false;
-    goldCheckFinished = false;
-    silverCheckFinished = false;
-    bronzeCheckFinished = false;
-    noMedalsCheckFinished = false;
-    writeCheckerStatus();
-    doLeaderboardChecks();
-}
-
 // Initial scan for leaderboard records - This *should* only need to be done in first install, but users can manually request it
 void scanForLeaderboardRecords() {
     log("Checking if any leaderboard scans are required");
 
-    if (!authorCheckFinished) {
-        print("Author check needed");
-        // Get all of the AUTHOR (or better) medals - This covers the third party plugins too
-        checkPool(getMapPoolsAtOrAbove(AUTHOR_MEDAL_ID, RecordType::MEDAL), "Author medals (& above)");
-        authorCheckFinished = true;
-        writeCheckerStatus();
-    }
+    for (uint i = 0; i < medalRecords.Length; i++) {
+        auto mc = medalRecords[i];
+        if (mc.medalId == UNFINISHED_MEDAL_ID) {
+            continue;
+        }
+        if (!mc.rescanCompleted) {
+            print("Rescan required for " + mc.name);
+            checkPool(getMapPool(mc.medalId), mc.name + " medals");
 
-    if (!goldCheckFinished) {
-        checkPool(getMapPool(GOLD_MEDAL_ID), "Gold medals");
-        goldCheckFinished = true;
-        writeCheckerStatus();
-    }
-
-    if (!silverCheckFinished) {
-        checkPool(getMapPool(SILVER_MEDAL_ID), "Silver medals");
-        silverCheckFinished = true;
-        writeCheckerStatus();
-    }
-
-    if (!bronzeCheckFinished) {
-        checkPool(getMapPool(BRONZE_MEDAL_ID), "Bronze medals");
-        bronzeCheckFinished = true;
-        writeCheckerStatus();
-    }
-
-    if (!noMedalsCheckFinished) {
-        checkPool(getMapPool(FINISHED_MEDAL_ID), "finished tracks");
-        noMedalsCheckFinished = true;
-        writeCheckerStatus();
+            mc.rescanCompleted = true;
+            writeCheckerStatus();
+        }
     }
 }
 
@@ -158,35 +107,36 @@ void checkPool(array<string> potentialMedalMaps, const string &in humanFriendlyS
     }
 
     print("You have " + potentialMedalMaps.Length + " " + humanFriendlyScanName + ". Checking if any of those are top of any leaderboards...");
-    // UI::ShowNotification("Scan starting", "Checking " + potentialMedalMaps.Length + " " + humanFriendlyScanName + " to see if you hold a record");
 
     uint changesMade = 0;
+    bool savePending = false;
 
-    // [TODO] - The min needs to be removed
-    for (int i = 0; i < Math::Min(5, potentialMedalMaps.Length); i++) {
+    for (uint i = 0; i < potentialMedalMaps.Length; i++) {
         string mapId = potentialMedalMaps[i];
         log("Checking if you're top of any boards on " + mapId);
         int leaderboardId = getPlayerLeaderboardRecord(mapId);
 
-        if (leaderboardId != NO_MEDAL_ID) {
-            // Yes the player has (or still has) the record
-            updateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD, true);
+        // Yes the player has (or still has) the record
+        if (forceUpdateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD, true)) {
             changesMade++;
+            savePending = true;
         }
 
         // Sequential saves for larger collections (Avoids loss of data during a close or crash)
-        if (i % 50 == 0 && changesMade > 0) {
+        if (i > 0 && i % 100 == 0 && changesMade > 0) {
             log("Leaderboard scan " + i + "/" + potentialMedalMaps.Length + ". Saving " + changesMade + " change(s)");
             writeAllStorageFiles(RecordType::LEADERBOARD);
             writeCheckerStatus();
-            changesMade = 0;
+            savePending = false;
         }
+
+        currentScanDescription = "Scan in progress: " + humanFriendlyScanName + " - " + i + "/" + potentialMedalMaps.Length;
         sleep(LEADERBOARD_RECORD_THROTTLE_MS);
     }
 
     print("Finished scanning for " + potentialMedalMaps.Length + " potential leadboard records for " + humanFriendlyScanName);
+    currentScanDescription = "Scan complete: " + humanFriendlyScanName + " yielded " + changesMade + " record" + (changesMade == 1 ? "" : "s");
     const string suffix = changesMade > 0 ? (" You're top of " + changesMade + " leaderboard" + (changesMade == 1 ? '' : 's') + ". Nice driving!") : "";
-    UI::ShowNotification("Scan complete", "Your " + potentialMedalMaps.Length + " " + humanFriendlyScanName + "have been checked." + suffix);
 
     if (changesMade > 0) {
         writeAllStorageFiles(RecordType::LEADERBOARD);
@@ -196,24 +146,25 @@ void checkPool(array<string> potentialMedalMaps, const string &in humanFriendlyS
 // Subsequent re-check for existing records to see if they've been beaten. There's no way to manually trigger this, it happens automatically
 void checkLeaderboardRecordsStillHeld() {
     recordCheckInProgress = true;
-    log("Starting re-check of all held leaderboard records");
+    print("Starting re-check of all held leaderboard records");
 
     array<string> currentRecords = getMapPoolsAtOrAbove(DISTRICT_ID, RecordType::LEADERBOARD);
 
     if (currentRecords.Length == 0) {
         print("You don't have any leaderboard records that need to be checked again - Keep grinding!");
-        recordCheckInProgress = false;
+        heldCheckEnded = Time::Stamp;
         return;
     }
 
     // Shuffle the array to ensure very large collections won't scan the same records on every game boot
     if (currentRecords.Length > 50) {
-        for (uint i = currentRecords.Length - 1; i >= 0; i--) {
+        for (uint i = currentRecords.Length - 1; i > 0; i--) {
             uint j = Math::Rand(0, i + 1);
             string temp = currentRecords[i];
             currentRecords[i] = currentRecords[j];
             currentRecords[j] = temp;
         }
+        yield();
     }
 
     print("Looks like you previously had " + currentRecords.Length + " leaderboard records. Let's see if they're still valid");
@@ -228,22 +179,22 @@ void checkLeaderboardRecordsStillHeld() {
         string mapId = currentRecords[i];
         int leaderboardId = getPlayerLeaderboardRecord(mapId);
 
-        if (leaderboardId != NO_MEDAL_ID) {
-            // Record found, possibly different
-            forceUpdateSaveDataa(mapId, RecordType::LEADERBOARD, leaderboardId, true);
+        if (forceUpdateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD, true)) {
             changesMade++;
         }
 
-        if (i % 50 == 0 && changesMade > 0) {
+        if (i > 0 && i % 50 == 0 && changesMade > 0) {
             log("Leaderboard record re-scan " + i + "/" + currentRecords.Length + ". Saving " + changesMade + " change(s)");
             writeAllStorageFiles(RecordType::LEADERBOARD);
             changesMade = 0;
         }
 
+        currentScanDescription = "Scan in progress: Existing record re-check - " + i + "/" + currentRecords.Length;
         sleep(LEADERBOARD_RECORD_THROTTLE_MS); // Throttle down to make sure we don't trip over any rate limits
     }
 
-    print("Check of " + currentRecords.Length + " medals is complete");
+    print("Check of " + currentRecords.Length + " medals/records is complete");
+    currentScanDescription = "";
 
     if(changesMade > 0) {
         writeAllStorageFiles(RecordType::LEADERBOARD);
@@ -251,37 +202,44 @@ void checkLeaderboardRecordsStillHeld() {
 
     heldCheckEnded = Time::Stamp;
     writeCheckerStatus();
-
-    recordCheckInProgress = false;
 }
 
-int getPlayerLeaderboardRecord(const string &in mapUid) {
+dictionary leaderboardCache = {};
+
+int getPlayerLeaderboardRecord(const string &in mapUid, bool skipCache = false) {
+    // Check the cache if possible
+    if (!skipCache && leaderboardCache.Exists(mapUid)) {
+        log("Found cache entry for " + mapUid);
+        int output;
+        leaderboardCache.Get(mapUid, output);
+        return output;
+    }
+
     string currentPlayerId = GetApp().LocalPlayerInfo.WebServicesUserId;
     string url;
-
-    // [TODO] Use a cache when racing
-    // if (worldRecordCache.Exists(mapUid)) {
-    //     WorldRecord currentRecord;
-    //     worldRecordCache.Get(mapUid, currentRecord);
-    //     if (currentRecord.playerId == currentPlayerId) {
-    //         return true;
-    //     }
-    // }
 
     // Also, you could use a seasonal/campaign groupID to batch fetch leaderboards - It might cut down on searches
     url = NadeoServices::BaseURLLive() + "/api/token/leaderboard/group/Personal_Best/map/" + mapUid + "/top?/length=1";
 
     string response = getFromUrl(url);
     // print(response);
-    Json::Value recordDetails = Json::Parse(response);
-    log("Response for " + mapUid + " has " + recordDetails["tops"].Length + " zones to check");
 
+    Json::Value recordDetails = Json::Parse(response);
+
+    if (!recordDetails.HasKey("tops")) {
+        log("It looks like " + mapUid + " might not exist");
+        leaderboardCache.Set(mapUid, NO_MEDAL_ID);
+        return NO_MEDAL_ID;
+    }
+
+    log("Response for " + mapUid + " has " + recordDetails["tops"].Length + " zones to check");
     // print(string(recordDetails["tops"]));
+
     for (uint i= 0; i < recordDetails["tops"].Length; i++) {
         Json::Value zone = recordDetails["tops"][i];
 
         // If a record doesn't exist (and it won't for Platform mode) just carry on
-        if (zone["top"].Length == 0) {
+        if (!zone.HasKey("top") || zone["top"].Length == 0) {
             continue;
         }
 
@@ -291,19 +249,21 @@ int getPlayerLeaderboardRecord(const string &in mapUid) {
 
         // print("Comparing " + leaderId + " to " + currentPlayerId);
         if (leaderId == currentPlayerId) {
-            print("You have the " + string(zone["zoneName"]) + " record on " + mapUid);
-            return int(ZONE_ORDER["" + i]);
+            log("\\$fffYou have the " + string(zone["zoneName"]) + " record on " + mapUid);
+            int leaderboardId = int(ZONE_ORDER["" + i]);
+            leaderboardCache.Set(mapUid, leaderboardId);
+            return leaderboardId;
         }
     }
 
+    leaderboardCache.Set(mapUid, NO_MEDAL_ID);
     return NO_MEDAL_ID;
 }
 
 // --------------------------------------------------------
 
-
 bool isCheckRequired() {
-    const int64 RECHECK_THRESHOLD = 1000 * 60 * 60 * 12; // Half a day
+    const int64 RECHECK_THRESHOLD = 60 * 60 * 24 * 7; // Once a week is probably fine
 
     int64 currentTime = Time::Stamp;
 
@@ -312,8 +272,9 @@ bool isCheckRequired() {
         return true;
     }
 
-    log("Rescan check: Is " + currentTime + " - " + RECHECK_THRESHOLD + " = " + (currentTime - RECHECK_THRESHOLD) +" > " + heldCheckEnded + "?");
-    return (currentTime - RECHECK_THRESHOLD) > heldCheckEnded;
+    bool result = (currentTime - RECHECK_THRESHOLD) > heldCheckEnded;
+    log("Rescan timer check: Is " + (currentTime - RECHECK_THRESHOLD) +" > " + heldCheckEnded + "? " + (result ? "YES! Time to check held records" : "Nope, we can wait"));
+    return result;
 }
 
 void readCheckerStatus() {
@@ -321,24 +282,33 @@ void readCheckerStatus() {
         auto content = Json::FromFile(checkerStatusFile);
 
         heldCheckEnded = readIntValue(content, "checkEnded");
-        authorCheckFinished = readBoolValue(content, "authorCheckDone");
-        goldCheckFinished = readBoolValue(content, "goldCheckDone");
-        silverCheckFinished = readBoolValue(content, "silverCheckDone");
-        bronzeCheckFinished = readBoolValue(content, "bronzeCheckDone");
-        noMedalsCheckFinished = readBoolValue(content, "noMedalCheckDone");
+        warrior.rescanCompleted = readBoolValue(content, "warriorCheckDone");
+        author.rescanCompleted = readBoolValue(content, "authorCheckDone");
+        gold.rescanCompleted = readBoolValue(content, "goldCheckDone");
+        silver.rescanCompleted = readBoolValue(content, "silverCheckDone");
+        bronze.rescanCompleted = readBoolValue(content, "bronzeCheckDone");
+        finishes.rescanCompleted = readBoolValue(content, "noMedalCheckDone");
 
-        log("State of medal checks: A: " + authorCheckFinished + ". G: " + goldCheckFinished + ". S: " + silverCheckFinished + ". B: " + bronzeCheckFinished + ". O: " + noMedalsCheckFinished);
+        log("State of medal checks:");
+        for (uint i = 0; i < medalRecords.Length; i++) {
+            if (medalRecords[i].medalId == UNFINISHED_MEDAL_ID) {
+                continue;
+            }
+
+            log("  - " + medalRecords[i].name + ": " + medalRecords[i].rescanCompleted);
+        }
     }
 }
 
 void writeCheckerStatus() {
     dictionary toWrite = {
         { "checkEnded", heldCheckEnded },
-        { "authorCheckDone", authorCheckFinished },
-        { "goldCheckDone", goldCheckFinished },
-        { "silverCheckDone", silverCheckFinished },
-        { "bronzeCheckDone", bronzeCheckFinished },
-        { "noMedalCheckDone", noMedalsCheckFinished }
+        { "warriorCheckDone", warrior.rescanCompleted },
+        { "authorCheckDone", author.rescanCompleted },
+        { "goldCheckDone", gold.rescanCompleted },
+        { "silverCheckDone", silver.rescanCompleted },
+        { "bronzeCheckDone", bronze.rescanCompleted },
+        { "noMedalCheckDone", finishes.rescanCompleted }
     };
 
     log("CheckerStatus to be written to disk: " + Json::Write(toWrite));

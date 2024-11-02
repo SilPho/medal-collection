@@ -5,10 +5,12 @@ bool showUI = false;
 string currentMapId = "";
 int currentMapMedal = NO_MEDAL_ID;
 int currentMapLeaderboardId = NO_MEDAL_ID;
-int currentBestTimeOrScore = MAX_INT;
+uint currentBestTimeOrScore = MAX_INT;
 dictionary mapsToCheckLater = {};
 
 void Main() {
+    log("Medal Collection plugin initialising...");
+
     auto startedMs = Time::get_Now();
     // Set up HTTP access for downloading records
     NadeoServices::AddAudience("NadeoServices");
@@ -25,7 +27,7 @@ void Main() {
     }
 
     // Start a co-routine to watch for race-finish events (This runs indefinitely)
-    startnew(checkForFinish);
+    startnew(sequenceWatcher);
 
     // Start another one to keep an eye out for newly loaded maps (Also runs indefinitely)
     startnew(checkForMapLoad);
@@ -65,22 +67,16 @@ void checkForNewMap() {
         log("\\$f0fCurrent MapId changed to " + mapId);
         currentMapId = mapId;
         currentBestTimeOrScore = MAX_INT;
-        // checkAgainLater(currentMapId);
 
         // When loading a map, check to see if a medal was earned previously
         // For new maps this will trigger an "unfinished" medal to be saved
         // For maps you've played before, it's a sanity check
-        bool timeSet = checkForEarnedMedal();
-
-        // If a time has been set, it's possible that it could be some sort of regional record
-        if (timeSet) {
-            currentMapLeaderboardId = checkMapLeaderboard(currentMapId);
-        }
+        checkForEarnedMedal();
     }
 }
 
-int checkMapLeaderboard(const string &in mapId) {
-    int leaderboardId = getPlayerLeaderboardRecord(mapId);
+int checkMapLeaderboard(const string &in mapId, bool skipCache = false) {
+    int leaderboardId = getPlayerLeaderboardRecord(mapId, skipCache);
 
     log("Leaderboard status for " + mapId + " is " + leaderboardId);
     updateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD);
@@ -132,7 +128,14 @@ bool checkForEarnedMedal() {
         }
         updateSaveData(currentMapId, currentMapMedal, RecordType::MEDAL);
         checkAgainLater(currentMapId);
-        checkMapLeaderboard(currentMapId);
+
+        currentBestTimeOrScore = bestTime;
+        currentMapLeaderboardId = checkMapLeaderboard(currentMapId, true);
+        return true;
+    }
+
+    // A time has been set, but it's not a new PB
+    if (bestTime < MAX_INT) {
         return true;
     }
 
@@ -142,7 +145,8 @@ bool checkForEarnedMedal() {
     return false;
 }
 
-void checkForFinish() {
+// Keep an eye on the game state. There are certain conditions that will warrant a re-check of records and medals
+void sequenceWatcher() {
     int prevUiSequence = 0;
     bool playgroundLoaded = false;
 
@@ -156,7 +160,7 @@ void checkForFinish() {
                 playgroundLoaded = true;
 
                 // If we loaded a map we don't need to show a random one any more
-                clearNextMap();
+                clearNextRandomMap();
             }
 
             // This state probably means we're playing Royal
@@ -223,7 +227,7 @@ void recheckPreviousMaps() {
             if (targetTime < Time::Stamp) {
                 log("Time to re-check a previous map: " + mapId);
                 // checkForEarnedMedal(); - This won't work, it uses the current ScoreManager
-                int newLeaderboardState = checkMapLeaderboard(mapId);
+                int newLeaderboardState = checkMapLeaderboard(mapId, true);
 
                 if (mapId == currentMapId) {
                     currentMapLeaderboardId = newLeaderboardState;
