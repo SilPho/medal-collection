@@ -77,28 +77,31 @@ void doLeaderboardChecks() {
         }
 
         recordCheckInProgress = false;
+        interruptCurrentLeaderboardScan = false;
     }
     else {
         UI::ShowNotification("Unable to run", "Another leaderboard record check is in progress. Please try again later");
     }
 
-    interruptCurrentLeaderboardScan = false;
 }
 
 // Initial scan for leaderboard records - This *should* only need to be done in first install, but users can manually request it
+// This is designed to ONLY be called as part of doLeaderboardChecks(). The state machine will probably break otherwise
 void scanForLeaderboardRecords() {
     log("Checking if any leaderboard scans are required");
 
     for (uint i = 0; i < medalRecords.Length; i++) {
         auto mc = medalRecords[i];
-        if (mc.medalId == UNFINISHED_MEDAL_ID) {
+        if (mc.medalId == UNFINISHED_MEDAL_ID || interruptCurrentLeaderboardScan) {
             continue;
         }
         if (!mc.rescanCompleted) {
             print("Rescan required for " + mc.name);
             checkPool(getMapPool(mc.medalId), mc.name + " medals");
 
-            mc.rescanCompleted = true;
+            if (!interruptCurrentLeaderboardScan) {
+                mc.rescanCompleted = true;
+            }
             writeCheckerStatus();
         }
     }
@@ -249,6 +252,11 @@ int getPlayerLeaderboardRecord(const string &in mapUid, bool skipCache = false) 
 // --------------------------------------------------------
 
 bool isCheckRequired() {
+    if (interruptCurrentLeaderboardScan) {
+        log("Interrupt flag is set, ignoring rescan timer");
+        return false;
+    }
+
     const int64 RECHECK_THRESHOLD = 60 * 60 * 24 * 7; // Once a week is probably fine
 
     int64 currentTime = Time::Stamp;
