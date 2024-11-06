@@ -55,6 +55,7 @@ void displayUI() {
 
 	UI::Begin("Medal Collection", windowFlags);
 
+	// Insert header row (if applicable)
 	if (settings_showHeader) {
 		if (UI::BeginTable("headerTable", 1)) {
 			UI::TableNextRow();
@@ -73,6 +74,7 @@ void displayUI() {
 		}
 	}
 
+	// Before we create the UI elements, there's a bit of prep work to do
 	int numMedals = medalRecords.Length;
 	int numRecords = leaderboardRecords.Length;
 
@@ -80,6 +82,7 @@ void displayUI() {
 		numMedals--;
 	}
 
+	// Calculate the number of (invisible) columns we need, based on the numerous settings
 	int numColumnsPerEntry = (1
 				+ (settings_showColours ? 1 : 0)
 				+ (settings_showNames ? 1 : 0)
@@ -89,8 +92,8 @@ void displayUI() {
 				+ (settings_showTotalPercentages && !settings_horizontalMode ? 1 : 0)
 			);
 
-	int numMedalColumns = numColumnsPerEntry * (settings_horizontalMode ? numMedals : 1);
 	int numRecordColumns = numColumnsPerEntry * (settings_horizontalMode ? numRecords : 1);
+	int numMedalColumns = numColumnsPerEntry * (settings_horizontalMode ? numMedals : 1);
 
 	int totalMedals = 0; // Leaderboard records calculate their percentage based on total medals, not just leaderboard records
 	for(uint i = 0; i < medalRecords.Length; i++) {
@@ -99,57 +102,32 @@ void displayUI() {
 		}
 	}
 
+	// Show leaderboard records row
 	if (settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0 && UI::BeginTable("recordTable", numRecordColumns)) {
-		insertRow(leaderboardRecords, totalMedals);
+		insertAccomplismentRow(leaderboardRecords, totalMedals);
 		UI::EndTable();
 	}
 
+	// Show a divder if both types of accomplishment are visible
 	if (settings_displayMode == DISPLAY_MODE_BOTH) {
 		UI::Separator();
 	}
 
+	// Show medals row
 	if (settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::BeginTable("medalTable", numMedalColumns)) {
 		UI::TableNextRow();
-		insertRow(medalRecords, totalMedals);
+		insertAccomplismentRow(medalRecords, totalMedals);
 		UI::EndTable();
 	}
 
 	// If a new next random map has been loaded, show the details and "Play" button
 	if (nextRandomMap.mapName != "") {
-		if (UI::BeginTable("NextMapTable", 1)) {
-			UI::TableNextRow();
-			UI::TableNextColumn();
-			UI::AlignTextToFramePadding();
-			if (!settings_horizontalMode) {
-				// Enforce some wrapping on the narrower vertical mode
-				UI::PushTextWrapPos(numColumnsPerEntry * 50);
-				UI::Text(Text::OpenplanetFormatCodes(nextRandomMap.mapName));
-				UI::PopTextWrapPos();
-			}
-			else {
-				UI::Text(Text::OpenplanetFormatCodes(nextRandomMap.mapName));
-				UI::SameLine();
-			}
-
-			if (nextRandomMap.mapFileUrl != "") {
-				if (UI::Button("Play")) {
-					startnew(loadMap);
-				}
-				UI::SameLine();
-				UI::Dummy(vec2(5, 5));
-				UI::SameLine();
-			}
-
-			if (UI::ButtonColored("Hide", 0, 0, 0.2)) {
-				clearNextRandomMap();
-			}
-			UI::EndTable();
-		}
+		insertRandomMapRow(numColumnsPerEntry);
 	}
 	UI::End();
 }
 
-void insertRow(array<MedalCount@> recordArray, const int totalMedals) {
+void insertAccomplismentRow(array<MedalCount@> recordArray, const int totalMedals) {
 	int cumulative = 0;
 
 	for(uint i = 0; i < recordArray.Length; i++) {
@@ -192,10 +170,18 @@ void insertRow(array<MedalCount@> recordArray, const int totalMedals) {
 			UI::TableNextColumn();
 		}
 
-		bool shouldHighlightMedal = currentMapMedal == medalId || currentMapLeaderboardId == medalId;
-
-		if (shouldHighlightMedal) {
+		if (currentMapMedal == medalId || currentMapLeaderboardId == medalId) {
 			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 0, 1));
+		}
+#if DEPENDENCY_WARRIORMEDALS
+		else if (currentMapId != "" && medalId == WARRIOR_MEDAL_ID && WarriorMedals::GetWMTime() == 0) {
+			// Faded grey for when the map doesn't have a Warrior medal
+			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 0.4));
+		}
+#endif
+		else {
+			// Default white colour
+			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 1));
 		}
 
 		if (settings_showNames) {
@@ -247,12 +233,47 @@ void insertRow(array<MedalCount@> recordArray, const int totalMedals) {
 			}
 		}
 
-		if (shouldHighlightMedal) {
-			UI::PopStyleColor();
-		}
+		UI::PopStyleColor();
 
 		if (!settings_horizontalMode) {
 			UI::TableNextRow();
 		}
+	}
+}
+
+void insertRandomMapRow(const int numColumnsPerEntry) {
+	if (UI::BeginTable("NextMapTable", 1)) {
+		UI::TableNextRow();
+		UI::TableNextColumn();
+		UI::AlignTextToFramePadding();
+
+		const string suffixToAppend = (nextRandomMap.mapType != 'Race' && nextRandomMap.mapType != "") ? " \\$aaa(This is a " + nextRandomMap.mapType + " map. It probably won't run from here)" : "";
+
+		if (!settings_horizontalMode) {
+			// Enforce some wrapping on the narrower vertical mode
+			UI::PushTextWrapPos(numColumnsPerEntry * 50);
+			UI::Text(Text::OpenplanetFormatCodes(nextRandomMap.mapName) + suffixToAppend);
+			UI::PopTextWrapPos();
+		}
+		else {
+			UI::Text(Text::OpenplanetFormatCodes(nextRandomMap.mapName) + suffixToAppend);
+			UI::SameLine();
+		}
+
+		if (nextRandomMap.mapFileUrl != "") {
+			if (UI::Button("Play")) {
+				startnew(loadMap);
+			}
+
+			// Add some padding between buttons
+			UI::SameLine();
+			UI::Dummy(vec2(3, 3));
+			UI::SameLine();
+
+			if (UI::ButtonColored("Hide", 0, 0, 0.2)) {
+				clearNextRandomMap();
+			}
+		}
+		UI::EndTable();
 	}
 }

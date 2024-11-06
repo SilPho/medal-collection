@@ -10,6 +10,8 @@ const string checkerStatusFile = IO::FromStorageFolder('collection_status.json')
 
 string currentScanDescription = "";
 
+bool interruptCurrentLeaderboardScan = false;
+
 // --------------------------------------------------------
 
 // Fetch the player zone names from a Nadeo API and use that to rename the player zones and toggle their visibility
@@ -79,6 +81,8 @@ void doLeaderboardChecks() {
     else {
         UI::ShowNotification("Unable to run", "Another leaderboard record check is in progress. Please try again later");
     }
+
+    interruptCurrentLeaderboardScan = false;
 }
 
 // Initial scan for leaderboard records - This *should* only need to be done in first install, but users can manually request it
@@ -130,13 +134,18 @@ void checkPool(array<string> potentialMedalMaps, const string &in humanFriendlyS
             savePending = false;
         }
 
-        currentScanDescription = "Scan in progress: " + humanFriendlyScanName + " - " + i + "/" + potentialMedalMaps.Length;
+        if (interruptCurrentLeaderboardScan) {
+            print("Leaderboard scan interrupted by user");
+            currentScanDescription = humanFriendlyScanName + " check was interrupted";
+            return;
+        }
+
+        currentScanDescription = "Checking " + humanFriendlyScanName + " - " + (i + 1) + "/" + potentialMedalMaps.Length;
         sleep(LEADERBOARD_RECORD_THROTTLE_MS);
     }
 
     print("Finished scanning for " + potentialMedalMaps.Length + " potential leadboard records for " + humanFriendlyScanName);
-    currentScanDescription = "Scan complete: " + humanFriendlyScanName + " yielded " + changesMade + " record" + (changesMade == 1 ? "" : "s");
-    const string suffix = changesMade > 0 ? (" You're top of " + changesMade + " leaderboard" + (changesMade == 1 ? '' : 's') + ". Nice driving!") : "";
+    currentScanDescription = "Check of " + humanFriendlyScanName + " yielded " + changesMade + " record" + (changesMade == 1 ? "" : "s");
 
     if (changesMade > 0) {
         writeAllStorageFiles(RecordType::LEADERBOARD);
@@ -163,42 +172,19 @@ void checkLeaderboardRecordsStillHeld() {
             string temp = currentRecords[i];
             currentRecords[i] = currentRecords[j];
             currentRecords[j] = temp;
+
+            // Be considerate of slower machines
+            if (i % 200 == 0) {
+                yield();
+            }
         }
-        yield();
     }
 
-    print("Looks like you previously had " + currentRecords.Length + " leaderboard records. Let's see if they're still valid");
-
-    uint changesMade = 0;
-
-    // Make note of when the scan started
+    // Reset the end timestamp, so if it gets interrupted we know to resume it
     heldCheckEnded = -1;
     writeCheckerStatus();
 
-    for (uint i = 0; i < currentRecords.Length; i++) {
-        string mapId = currentRecords[i];
-        int leaderboardId = getPlayerLeaderboardRecord(mapId);
-
-        if (forceUpdateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD, true)) {
-            changesMade++;
-        }
-
-        if (i > 0 && i % 50 == 0 && changesMade > 0) {
-            log("Leaderboard record re-scan " + i + "/" + currentRecords.Length + ". Saving " + changesMade + " change(s)");
-            writeAllStorageFiles(RecordType::LEADERBOARD);
-            changesMade = 0;
-        }
-
-        currentScanDescription = "Scan in progress: Existing record re-check - " + i + "/" + currentRecords.Length;
-        sleep(LEADERBOARD_RECORD_THROTTLE_MS); // Throttle down to make sure we don't trip over any rate limits
-    }
-
-    print("Check of " + currentRecords.Length + " medals/records is complete");
-    currentScanDescription = "";
-
-    if(changesMade > 0) {
-        writeAllStorageFiles(RecordType::LEADERBOARD);
-    }
+    checkPool(currentRecords, "Leaderboard records");
 
     heldCheckEnded = Time::Stamp;
     writeCheckerStatus();

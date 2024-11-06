@@ -2,7 +2,7 @@ class NextRandomMap {
     string mapUid;
     string mapFileUrl;
     string mapName;
-    string currentMedal;
+    string mapType;
 }
 
 NextRandomMap nextRandomMap = NextRandomMap();
@@ -10,11 +10,12 @@ NextRandomMap nextRandomMap = NextRandomMap();
 void clearNextRandomMap() {
     nextRandomMap.mapName = "";
     nextRandomMap.mapFileUrl = "";
+    nextRandomMap.mapType = "";
 }
 
 void playRandomMap(int medalType) {
     log("Time to play a random " + medalType + " map");
-    nextRandomMap.mapFileUrl = "";
+    clearNextRandomMap();
 
     auto availableMaps = getMapPool(medalType);
 
@@ -40,9 +41,13 @@ void getMapDetails() {
     string url = getMapSearchUrl(true) + nextRandomMap.mapUid;
     string nadeoResponse = getFromUrl(url);
     Json::Value mapDetails = Json::Parse(nadeoResponse);
+    print(Json::Write(nadeoResponse));
 
     const string mapType = string(mapDetails[0]["mapType"]);
     const string mapName = string(mapDetails[0]["name"]);
+
+    // Store this for the sake of the renderer
+    nextRandomMap.mapType = mapType.Replace("TrackMania\\TM_", "");
 
     if (mapDetails.Length != 1) {
         nextRandomMap.mapName = "Something went wrong. Please try again";
@@ -93,6 +98,6 @@ void loadMap() {
         yield();
     }
 
-    app.ManiaTitleControlScriptAPI.PlayMap(nextRandomMap.mapFileUrl, "TrackMania/TM_PlayMap_Local", "");
+    app.ManiaTitleControlScriptAPI.PlayMap(nextRandomMap.mapFileUrl, "", "");
     clearNextRandomMap();
 }

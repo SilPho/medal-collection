@@ -116,16 +116,16 @@ bool checkForEarnedMedal() {
 
     currentMapMedal = scoreMgr.Map_GetMedal(userId, currentMapId, "PersonalBest", "", gameMode, "");
 
+    int pluginMedal = checkForPluginMedals(currentMapId, bestTime);
+    if (pluginMedal > currentMapMedal) {
+        print("You've earned a third-party medal: " + pluginMedal);
+        currentMapMedal = pluginMedal;
+    }
+
     log("Map type: " + gameMode + ". Best medal is " + currentMapMedal + ". Best time (or score) is " + bestTime);
 
     // Game will return 0 for unfinished maps AND for times slower than bronze. Checking for a time will differentiate it
     if (bestTime < currentBestTimeOrScore) {
-        // log("Earned " + currentMapMedal);
-        int pluginMedal = checkForPluginMedals(currentMapId, bestTime);
-        if (pluginMedal > currentMapMedal) {
-            print("You've earned a third-party medal: " + pluginMedal);
-            currentMapMedal = pluginMedal;
-        }
         updateSaveData(currentMapId, currentMapMedal, RecordType::MEDAL);
         checkAgainLater(currentMapId);
 

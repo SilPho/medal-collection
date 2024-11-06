@@ -204,5 +204,11 @@ void renderAdvancedTab() {
 
         // Show the current progression if available (From LeaderboardChecker)
         UI::Text(currentScanDescription);
+
+        if (recordCheckInProgress) {
+            if (UI::ButtonColored("Stop the current scan", 0, 1, 1)) {
+                interruptCurrentLeaderboardScan = true;
+            }
+        }
     }
 }
