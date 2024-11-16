@@ -195,7 +195,7 @@ void checkLeaderboardRecordsStillHeld() {
 
 dictionary leaderboardCache = {};
 
-int getPlayerLeaderboardRecord(const string &in mapUid, bool skipCache = false) {
+int getPlayerLeaderboardRecord(const string &in mapUid, bool skipCache = false, uint bestRaceTime = MAX_INT) {
     // Check the cache if possible
     if (!skipCache && leaderboardCache.Exists(mapUid)) {
         log("Found cache entry for " + mapUid);
@@ -234,11 +234,13 @@ int getPlayerLeaderboardRecord(const string &in mapUid, bool skipCache = false) 
 
         Json::Value zoneLeader = zone["top"][0];
         auto leaderId = string(zoneLeader["accountId"]);
+        uint score = int(zoneLeader["score"]);
         // log(string(zone["zoneName"]) + ". Record is " + int(zoneLeader["score"]) + " by " + leaderId);
 
-        // print("Comparing " + leaderId + " to " + currentPlayerId);
-        if (leaderId == currentPlayerId) {
-            log("\\$fffYou have the " + string(zone["zoneName"]) + " record on " + mapUid);
+        // Either the server will say you have the record, or the current time is better
+        // Checking for an improved time does mean we assume the zones remain ordered from widest to narrowest (From World to district)
+        if (leaderId == currentPlayerId || bestRaceTime < score) {
+            log("\\$fffYou have the " + string(zone["zoneName"]) + " record on " + mapUid + " (" + bestRaceTime + " < " + score + ")");
             int leaderboardId = int(ZONE_ORDER["" + i]);
             leaderboardCache.Set(mapUid, leaderboardId);
             return leaderboardId;
