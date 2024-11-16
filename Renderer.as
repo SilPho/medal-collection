@@ -198,8 +198,12 @@ void insertAccomplismentRow(array<MedalCount@> recordArray, const int totalMedal
 		string medalCount = "" + recordArray[i].count;
 
 		// Use ceil because it prevents rounding to 0, which wouldn't be shown
-		float percent = totalMedals > 0 ? Math::Ceil(recordArray[i].count / float(totalMedals) * 100) : 0;
-		float cumulativePercent = totalMedals > 0 ? Math::Ceil(cumulative / float(totalMedals) * 100) : 0;
+		float percent = totalMedals > 0 ? recordArray[i].count / float(totalMedals) * 100 : 0;
+		float cumulativePercent = totalMedals > 0 ? cumulative / float(totalMedals) * 100 : 0;
+
+		// Make sure that we round up to 1% but down to 99%. So that 0% and 100% are not accidentally included
+		percent = (percent > 50) ? Math::Floor(percent) : Math::Ceil(percent);
+		cumulativePercent = (cumulativePercent > 50) ? Math::Floor(cumulativePercent) : Math::Ceil(cumulativePercent);
 
 		// Only show cumulative if it is enabled and different to the regular perecentage if that's enabled too
 		bool showCumulativePercent = settings_showTotalPercentages && (!settings_showPercentages || cumulative != recordArray[i].count) && recordArray[i].medalId != UNFINISHED_MEDAL_ID;

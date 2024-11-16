@@ -189,8 +189,10 @@ void checkLeaderboardRecordsStillHeld() {
 
     checkPool(currentRecords, "Leaderboard records");
 
-    heldCheckEnded = Time::Stamp;
-    writeCheckerStatus();
+    if (!interruptCurrentLeaderboardScan) {
+        heldCheckEnded = Time::Stamp;
+        writeCheckerStatus();
+    }
 }
 
 dictionary leaderboardCache = {};

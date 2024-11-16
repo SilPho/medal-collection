@@ -130,7 +130,7 @@ bool checkForEarnedMedal() {
         checkAgainLater(currentMapId);
 
         currentBestTimeOrScore = bestTime;
-        if (gameMode == "Race") {
+        if (gameMode == "TimeAttack") {
             currentMapLeaderboardId = checkMapLeaderboard(currentMapId, true, currentBestTimeOrScore);
         }
         else {
