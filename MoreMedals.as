@@ -1,5 +1,5 @@
 uint checkForPluginMedals(const string &in currentMapId, int bestTime) {
-    int output = 0;
+    int output = NO_MEDAL_ID;
 #if DEPENDENCY_WARRIORMEDALS
     // log("Checking for Warrior medals");
     int targetTime = WarriorMedals::GetWMTime(currentMapId);

@@ -118,7 +118,7 @@ bool checkForEarnedMedal() {
 
     int pluginMedal = checkForPluginMedals(currentMapId, bestTime);
     if (pluginMedal > currentMapMedal) {
-        print("You've earned a third-party medal: " + pluginMedal);
+        print("You've earned a third-party medal: " + pluginMedal + ", compared to the " + currentMapMedal + " medal from Nadeo");
         currentMapMedal = pluginMedal;
     }
 
@@ -130,7 +130,7 @@ bool checkForEarnedMedal() {
         checkAgainLater(currentMapId);
 
         currentBestTimeOrScore = bestTime;
-        if (gameMode == "Race") {
+        if (gameMode == "TimeAttack") {
             currentMapLeaderboardId = checkMapLeaderboard(currentMapId, true, currentBestTimeOrScore);
         }
         else {

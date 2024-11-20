@@ -13,6 +13,7 @@ bool isValidMapType(const string &in mapType) {
     return mapType == "TrackMania\\TM_Race" || mapType == "TrackMania\\TM_Stunt" || mapType == "TrackMania\\TM_Platform";
 }
 
+// Reminder: GameMode and Map Type are not always the same thing. TM_Race is a map type. TimeAttack is a game mode.
 string getGameMode(const string &in mapType) {
     if (!isValidMapType(mapType)) {
         return "";
@@ -23,7 +24,7 @@ string getGameMode(const string &in mapType) {
     if (mapType == "TrackMania\\TM_Platform") {
         return "Platform";
     }
-    return "Race";
+    return "TimeAttack";
 }
 
 bool isPlayerInGame() {

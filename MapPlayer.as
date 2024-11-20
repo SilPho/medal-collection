@@ -67,7 +67,7 @@ void getMapDetails() {
         // Map is valid and good to go
         nextRandomMap.mapName = mapName;
         nextRandomMap.mapFileUrl = mapDetails[0]["fileUrl"];
-        log("Map name: " + mapName + ". Map URL: " + nextRandomMap.mapFileUrl);
+        log("Map name: " + mapName + ". Map type: " + nextRandomMap.mapType + ". Map URL: " + nextRandomMap.mapFileUrl);
     }
 }
 
