@@ -5,8 +5,9 @@ class MedalCount {
 	string color;
     array<float> buttonHsv;
     string tooltipSuffix;
-    bool isVisible;
-    bool rescanCompleted;
+    bool isVisible = false; // This will be set by getPlayerZones() on first boot
+    bool rescanCompleted = false; // This will be set by readCheckerStatus()
+    bool isEligibleForScans = false;
 
 	MedalCount(int medalId, const string &in name="", const string &in color="$000", array<float> buttonHsv = { 0, 1, 1 }, const string &in tooltipSuffix = ""){
         this.medalId = medalId;
@@ -15,8 +16,8 @@ class MedalCount {
 		this.color = color;
         this.buttonHsv = buttonHsv;
         this.tooltipSuffix = tooltipSuffix;
-        this.isVisible = false; // This will be set by getPlayerZones() on first boot
-        this.rescanCompleted = false; // This will be set by readCheckerStatus()
+        this.isVisible = false;
+        this.rescanCompleted = false;
 	}
 }
 
@@ -100,6 +101,7 @@ void asyncInitialise() {
     // Now that we know which learderboards we can show, we can turn on the medal display too (avoids jumping UI)
     for(uint j = 0; j < medalRecords.Length; j++) {
         medalRecords[j].isVisible = true;
+        medalRecords[j].isEligibleForScans = medalRecords[j].medalId != UNFINISHED_MEDAL_ID;
     }
 
     isInitialised = true;

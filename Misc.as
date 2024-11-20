@@ -23,7 +23,7 @@ string getGameMode(const string &in mapType) {
     if (mapType == "TrackMania\\TM_Platform") {
         return "Platform";
     }
-    return "TimeAttack";
+    return "Race";
 }
 
 bool isPlayerInGame() {
@@ -95,7 +95,7 @@ string postToUrl(string &in url, Json::Value content) {
 
     if (request.ResponseCode() != 200) {
         log("Trackmania API might be broken. Status: " + request.ResponseCode() + ". Response was: " + request.Body);
-        throw("Unable to fetch " + url);
+        throw("Unable to post to " + url);
     }
 
     return request.String();

@@ -22,10 +22,12 @@ void checkWarriorRecords() {
 
 void getWarriorMedals() {
     bool didSomethingChange = false;
+    MEDAL_CHECK_STATUS.currentScanDescription = "Warrior medal check in progress (This should only take a second)";
 
 #if DEPENDENCY_WARRIORMEDALS
     dictionary warriorData = WarriorMedals::GetMaps();
     array<string> mapUids = warriorData.GetKeys();
+    int medalsFound = 0;
 
     for(uint i = 0; i < mapUids.Length; i++) {
         string mapUid = mapUids[i];
@@ -34,6 +36,7 @@ void getWarriorMedals() {
         if (warriorResult.get_hasWarrior()) {
             bool newInformation = updateSaveData(mapUid, WARRIOR_MEDAL_ID, RecordType::MEDAL, true);
             didSomethingChange = didSomethingChange || newInformation;
+            medalsFound++;
         }
     }
 #endif
@@ -45,4 +48,6 @@ void getWarriorMedals() {
     else {
         print("Warrior medals are unchanged. No save required");
     }
+
+    MEDAL_CHECK_STATUS.currentScanDescription = "Warrior medal check found " + medalsFound + " medal" + (medalsFound == 1 ? "" : "s");
 }

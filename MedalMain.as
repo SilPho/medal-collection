@@ -76,7 +76,7 @@ void checkForNewMap() {
 }
 
 int checkMapLeaderboard(const string &in mapId, bool skipCache = false, uint bestRaceTime  = MAX_INT) {
-    int leaderboardId = getPlayerLeaderboardRecord(mapId, skipCache, bestRaceTime);
+    int leaderboardId = getPlayerLeaderboardRecord(mapId, skipCache, bestRaceTime).leaderboardId;
 
     log("Leaderboard status for " + mapId + " is " + leaderboardId);
     updateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD);
@@ -130,7 +130,7 @@ bool checkForEarnedMedal() {
         checkAgainLater(currentMapId);
 
         currentBestTimeOrScore = bestTime;
-        if (gameMode == "TimeAttack") {
+        if (gameMode == "Race") {
             currentMapLeaderboardId = checkMapLeaderboard(currentMapId, true, currentBestTimeOrScore);
         }
         else {

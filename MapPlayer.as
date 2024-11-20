@@ -41,7 +41,13 @@ void getMapDetails() {
     string url = getMapSearchUrl(true) + nextRandomMap.mapUid;
     string nadeoResponse = getFromUrl(url);
     Json::Value mapDetails = Json::Parse(nadeoResponse);
-    print(Json::Write(nadeoResponse));
+    print(nextRandomMap.mapUid + ": " + Json::Write(nadeoResponse));
+
+    if (mapDetails.Length == 0) {
+        nextRandomMap.mapName = "Something went wrong. Please try again";
+        warn("Map " + nextRandomMap.mapUid + " returned an empty response");
+        return;
+    }
 
     const string mapType = string(mapDetails[0]["mapType"]);
     const string mapName = string(mapDetails[0]["name"]);
@@ -49,10 +55,7 @@ void getMapDetails() {
     // Store this for the sake of the renderer
     nextRandomMap.mapType = mapType.Replace("TrackMania\\TM_", "");
 
-    if (mapDetails.Length != 1) {
-        nextRandomMap.mapName = "Something went wrong. Please try again";
-    }
-    else if (!isValidMapType(mapType)) {
+    if (!isValidMapType(mapType)) {
         // Invalid map type found - Somehow some dodgy data got into the Storage
         nextRandomMap.mapName = "Oops, " + mapName + "$g is a " + mapType + " map. Removed it from your collection to keep things tidy";
         deleteMapFromStorage(nextRandomMap.mapUid, RecordType::LEADERBOARD);
@@ -66,7 +69,6 @@ void getMapDetails() {
         nextRandomMap.mapFileUrl = mapDetails[0]["fileUrl"];
         log("Map name: " + mapName + ". Map URL: " + nextRandomMap.mapFileUrl);
     }
-
 }
 
 // Actually requests the map to be played

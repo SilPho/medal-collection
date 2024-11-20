@@ -1,3 +1,5 @@
+const string[] hourglassIcons = { Icons::HourglassO, Icons::HourglassStart, Icons::HourglassHalf, Icons::HourglassEnd };
+
 void Render() {
 	// bool hudRule = !settings_showOnlyWithHud || UI::IsGameUIVisible();
 	bool openplanetRule = !settings_showOnlyWithOpenplanet || UI::IsOverlayShown();
@@ -192,10 +194,21 @@ void insertAccomplismentRow(array<MedalCount@> recordArray, const int totalMedal
 
 		// Medal count
 		UI::TableNextColumn();
-		string countText = "";
 		cumulative += recordArray[i].count;
-		countText = "" + cumulative;
-		string medalCount = "" + recordArray[i].count;
+		string medalCount = "";
+
+		const bool isScanHappening = recordArray[i].medalId == LEADERBOARD_STATUS.currentScanId;
+		const bool isScanPending = LEADERBOARD_STATUS.recordCheckInProgress && settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0 && !recordArray[i].rescanCompleted && recordArray[i].isEligibleForScans;
+
+		if (isScanHappening) {
+			const int iconIndex = Time::Stamp % hourglassIcons.Length;
+			medalCount = medalCount + hourglassIcons[iconIndex];
+		}
+		else if (isScanPending) {
+			medalCount = medalCount + hourglassIcons[0];
+		}
+
+		medalCount += "" + recordArray[i].count;
 
 		// Use ceil because it prevents rounding to 0, which wouldn't be shown
 		float percent = totalMedals > 0 ? recordArray[i].count / float(totalMedals) * 100 : 0;
@@ -234,6 +247,22 @@ void insertAccomplismentRow(array<MedalCount@> recordArray, const int totalMedal
 			if (showCumulativePercent) {
 				UI::TableNextColumn();
 				UI::Text((cumulativePercent > 0 && cumulativePercent < 100) ? "[" + cumulativePercent + "%]" : "");
+			}
+		}
+
+		// Show tooltips over any in-progress icons
+		if (isScanHappening) {
+			if (UI::IsItemHovered()) {
+				UI::BeginTooltip();
+				UI::Text("Leaderboard records: " + LEADERBOARD_STATUS.currentScanDescription);
+				UI::EndTooltip();
+			}
+		}
+		else if (isScanPending) {
+			if (UI::IsItemHovered()) {
+				UI::BeginTooltip();
+				UI::Text("A leaderboard scan is pending for this collection");
+				UI::EndTooltip();
 			}
 		}
 

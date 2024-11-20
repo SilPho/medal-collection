@@ -170,6 +170,10 @@ void renderAdvancedTab() {
     }
 #endif
 
+    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0) {
+        UI::Text(MEDAL_CHECK_STATUS.currentScanDescription);
+    }
+
     if(settings_displayMode == DISPLAY_MODE_BOTH) {
         UI::Text("");
     }
@@ -182,7 +186,7 @@ void renderAdvancedTab() {
                 continue;
             }
 
-            if (recordCheckInProgress) {
+            if (LEADERBOARD_STATUS.recordCheckInProgress) {
                 UI::BeginDisabled();
                 UI::ButtonColored("Re-check leaderboards for your " + mc.name + " records", 0.5, 0, 0.5);
                 UI::SameLine();
@@ -203,11 +207,11 @@ void renderAdvancedTab() {
         }
 
         // Show the current progression if available (From LeaderboardChecker)
-        UI::Text(currentScanDescription);
+        UI::Text(LEADERBOARD_STATUS.currentScanDescription);
 
-        if (recordCheckInProgress) {
+        if (LEADERBOARD_STATUS.recordCheckInProgress) {
             if (UI::ButtonColored("Stop the current scan", 0, 1, 1)) {
-                interruptCurrentLeaderboardScan = true;
+                LEADERBOARD_STATUS.interruptCurrentScan = true;
             }
         }
     }

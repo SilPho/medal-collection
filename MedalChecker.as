@@ -4,16 +4,20 @@ void checkAllNadeoRecords() {
 
 void getMapMedals() {
     print("Starting full history check");
+    MEDAL_CHECK_STATUS.recordCheckInProgress = true;
+    MEDAL_CHECK_STATUS.currentScanDescription = "Medal check is starting...";
     waitForNadeoAuthentication();
 
     dictionary medalLookup = getUserMedals();
 
     int numMedals = processMapIds(medalLookup);
 
-    // Do this now, just in case anything goes wrong with checking other records
+    MEDAL_CHECK_STATUS.currentScanDescription = "Medal check is finishing...";
     writeAllStorageFiles(RecordType::MEDAL);
 
     UI::ShowNotification("Medal Collection", "Medal Collection updated with " + numMedals + " medals!");
+    MEDAL_CHECK_STATUS.currentScanDescription = "Medal check found " + numMedals + " medals";
+    MEDAL_CHECK_STATUS.recordCheckInProgress = false;
 }
 
 dictionary getUserMedals() {
@@ -59,12 +63,17 @@ int processMapIds(dictionary mapLookup) {
 
     const int batchSize = 200;
 
+    MEDAL_CHECK_STATUS.currentScanDescription = "Medal check has processed 0 /" + mapLookup.GetSize() + " maps";
+
     for (uint i = 0; i < mapIds.Length; i++) {
         url += mapIds[i];
 
-        if (i > 0 && i % batchSize == 0) {
+        if (i % batchSize == 0) {
             log("Processing " + batchSize +" maps in batch " + (i / batchSize) + " of " + ((mapIds.Length / batchSize) + 1));
+            MEDAL_CHECK_STATUS.currentScanDescription = "Medal check has counted " + i + " /" + mapLookup.GetSize() + " medals";
             processBatch(url, mapLookup);
+
+            // The sleeps aren't necessary, but help prevent FPS drops
             sleep(500);
             uncheckedMaps = false;
             url = getMapSearchUrl();
