@@ -178,7 +178,7 @@ void checkPool(array<string> potentialMedalMaps, const string &in humanFriendlyS
     }
 
     print("Finished scanning for " + potentialMedalMaps.Length + " potential leadboard records for " + humanFriendlyScanName);
-    LEADERBOARD_STATUS.currentScanDescription = "Check of " + humanFriendlyScanName + " yielded " + changesMade + " record" + (changesMade == 1 ? "" : "s");
+    LEADERBOARD_STATUS.currentScanDescription = "Check of " + humanFriendlyScanName + " completed successfully and made " + changesMade + " change" + (changesMade == 1 ? "" : "s");
 
     if (changesMade > 0) {
         writeAllStorageFiles(RecordType::LEADERBOARD);
@@ -217,7 +217,7 @@ void checkLeaderboardRecordsStillHeld() {
     LEADERBOARD_STATUS.heldCheckEnded = -1;
     writeCheckerStatus();
 
-    checkPool(currentRecords, "Leaderboard records");
+    checkPool(currentRecords, "your existing leaderboard records");
 
     if (!LEADERBOARD_STATUS.interruptCurrentScan) {
         LEADERBOARD_STATUS.heldCheckEnded = Time::Stamp;

@@ -124,6 +124,7 @@ void displayUI() {
 
 	// If a new next random map has been loaded, show the details and "Play" button
 	if (nextRandomMap.mapName != "") {
+		UI::Separator();
 		insertRandomMapRow(numColumnsPerEntry);
 	}
 	UI::End();
@@ -305,6 +306,25 @@ void insertRandomMapRow(const int numColumnsPerEntry) {
 
 			if (UI::ButtonColored("Hide", 0, 0, 0.2)) {
 				clearNextRandomMap();
+			}
+
+			// Show the special "hide this map" button (only for unfinished maps)
+			if (nextRandomMap.mapMedal == UNFINISHED_MEDAL_ID) {
+				if (settings_horizontalMode) {
+					UI::SameLine();
+					UI::Dummy(vec2(3, 3));
+					UI::SameLine();
+				}
+
+				if (UI::ButtonColored("Remove from collection", 0, 0.8, 0.7)) {
+					hideNextRandomMap();
+				}
+
+				if (UI::IsItemHovered()) {
+					UI::BeginTooltip();
+					UI::Text("Permanently remove this unfinished map from your collection, unless you play it again");
+					UI::EndTooltip();
+				}
 			}
 		}
 		UI::EndTable();

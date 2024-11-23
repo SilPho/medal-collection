@@ -174,11 +174,9 @@ void renderAdvancedTab() {
         UI::Text(MEDAL_CHECK_STATUS.currentScanDescription);
     }
 
-    if(settings_displayMode == DISPLAY_MODE_BOTH) {
-        UI::Text("");
-    }
-
     if(settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0) {
+        UI::Text("");
+        UI::Text("Checking leaderboard records is deliberately quite slow to avoid excessive server load");
         for (uint i = 0; i < medalRecords.Length; i++) {
             auto mc = medalRecords[i];
 

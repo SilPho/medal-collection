@@ -3,6 +3,7 @@ class NextRandomMap {
     string mapFileUrl;
     string mapName;
     string mapType;
+    int mapMedal;
 }
 
 NextRandomMap nextRandomMap = NextRandomMap();
@@ -11,6 +12,12 @@ void clearNextRandomMap() {
     nextRandomMap.mapName = "";
     nextRandomMap.mapFileUrl = "";
     nextRandomMap.mapType = "";
+}
+
+void hideNextRandomMap() {
+    print("Removing " + nextRandomMap.mapUid + " (" + nextRandomMap.mapName + ") from collection entirely");
+    deleteMapFromStorage(nextRandomMap.mapUid, RecordType::MEDAL);
+    clearNextRandomMap();
 }
 
 void playRandomMap(int medalType) {
@@ -34,6 +41,7 @@ void playRandomMap(int medalType) {
     log("Time to download details for  " + mapUid + ". There are " + availableMaps.Length + " maps left");
 
     nextRandomMap.mapUid = mapUid;
+    nextRandomMap.mapMedal = medalType;
     startnew(getMapDetails);
 }
 
