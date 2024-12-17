@@ -79,7 +79,7 @@ int checkMapLeaderboard(const string &in mapId, bool skipCache = false, uint bes
     int leaderboardId = getPlayerLeaderboardRecord(mapId, skipCache, bestRaceTime).leaderboardId;
 
     log("Leaderboard status for " + mapId + " is " + leaderboardId);
-    updateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD);
+    forceUpdateSaveData(mapId, leaderboardId, RecordType::LEADERBOARD);
     return leaderboardId;
 }
 

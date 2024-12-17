@@ -47,8 +47,8 @@ auto territory = MedalCount(TERRITORY_ID, "Territory", "\\$35e", { 0.63, 0.8, 0.
 auto region = MedalCount(REGION_ID, "Region", "\\$3b6", { 0.4, 0.7, 0.7}, "that you have the Regional record on");
 auto district = MedalCount(DISTRICT_ID, "District", "\\$bbb", { 1, 0, 0.7}, "that you have the Local District record on");
 
-auto champion = MedalCount(CHAMPION_MEDAL_ID, "Champion", "\\$701", { 0.34, 1, 0.47 }, "that you earned a Champion medal on");
-auto warrior = MedalCount(WARRIOR_MEDAL_ID, "Warrior", "\\$000", { 0.34, 1, 0.47 }, "that you earned a Warrior medal on");
+auto champion = MedalCount(CHAMPION_MEDAL_ID, "Champion", "\\$901", { 0, 0.7, 0.8}, "that you earned a Champion medal on");
+auto warrior = MedalCount(WARRIOR_MEDAL_ID, "Warrior", "\\$000", { 0, 0, 0 }, "that you earned a Warrior medal on"); // Colours sourced from actual plugin
 auto author = MedalCount(AUTHOR_MEDAL_ID, "Author", "\\$071", { 0.34, 1, 0.47 }, "that you earned an Author medal on");
 auto gold = MedalCount(GOLD_MEDAL_ID, "Gold", "\\$db4", { 0.13, 0.70, 0.87}, "that you earned a Gold medal on");
 auto silver = MedalCount(SILVER_MEDAL_ID, "Silver", "\\$899", { 0.5, 0.11, 0.60}, "that you earned a Silver medal on");
@@ -91,6 +91,10 @@ void initialiseStorage() {
     medalRecords.InsertAt(0, warrior);
 #endif
 
+#if DEPENDENCY_CHAMPIONMEDALS
+    medalRecords.InsertAt( 0, champion);
+#endif
+
     startnew(asyncInitialise);
 }
 
@@ -116,18 +120,28 @@ bool updateSaveData(const string &in mapId, int newBestMedal, RecordType recordT
         sourceDict.Get(mapId, oldCurrentMedal);
     }
     bool improvedMedal = newBestMedal > oldCurrentMedal;
-    bool hadMedalAlready = sourceDict.Exists(mapId);
+    bool hadAnyMedalAlready = sourceDict.Exists(mapId);
+    bool forceSaveDueTo3rdParty = recordType == RecordType::MEDAL && newBestMedal != oldCurrentMedal && oldCurrentMedal > author.medalId;
 
-    // Only save if we're improving medals (unlike forceUpdate which will remove them)
-    if ((hadMedalAlready && !improvedMedal) || (newBestMedal == NO_MEDAL_ID)) {
-        return false;
+    // Only do a full-save if the medal has actually been improved (or )
+    if (newBestMedal != NO_MEDAL_ID && (forceSaveDueTo3rdParty || !hadAnyMedalAlready || improvedMedal)) {
+        const string typeAsStr = recordType == RecordType::LEADERBOARD ? 'leaderboard record' : 'medal';
+
+        if (forceSaveDueTo3rdParty) {
+            log("Forcing a save of this " + typeAsStr + " because we might need to overwrite a 3rd party medal");
+        }
+        else if (!hadAnyMedalAlready) {
+            log("Forcing a save because this is the first " + typeAsStr + " for this map");
+        }
+        else {
+            log("Forcing a save because the player has improved an existing " + typeAsStr);
+        }
+        // log("This is either a new " + typeAsStr + ": " + !hadAnyMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + newBestMedal + " > " + oldCurrentMedal + ")");
+        forceUpdateSaveData(mapId, newBestMedal, recordType, suppressWriting);
+        return true;
     }
 
-    const string typeAsStr = recordType == RecordType::LEADERBOARD ? 'leaderboard record' : 'medal';
-
-    log("This is either a new " + typeAsStr + ": " + !hadMedalAlready + " OR it is an improvement: " + improvedMedal + " (" + newBestMedal + " > " + oldCurrentMedal + ")");
-    forceUpdateSaveData(mapId, newBestMedal, recordType, suppressWriting);
-    return true;
+    return false;
 }
 
 // Updates the save data even if the accomplishment is a downgrade. Makes no change if it matches what is already saved.
@@ -422,8 +436,15 @@ void readStorageFile(string &in jsonFile) {
                 for(uint i=0; i < allIds.Length; i++) {
                     auto medalEarned = int(mapList.Get("" + allIds[i]));
 #if !DEPENDENCY_WARRIORMEDALS
-                    // If the Warrior plugin was uninstalled then just revert to Author
+                    // If the Warrior Medals plugin was uninstalled then just revert to Author
                     if (medalEarned == WARRIOR_MEDAL_ID) {
+                        medalEarned = AUTHOR_MEDAL_ID;
+                    }
+#endif
+#if !DEPENDENCY_CHAMPIONMEDALS
+                    // Similarly, if the Champion Medals plugin was uninstalled then just revert to Author
+                    // [TODO] Might need to check if they have the Warrior medal instead
+                    if (medalEarned == CHAMPION_MEDAL_ID) {
                         medalEarned = AUTHOR_MEDAL_ID;
                     }
 #endif

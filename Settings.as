@@ -158,15 +158,27 @@ void renderAdvancedTab() {
     UI::Text("");
     UI::Separator();
     UI::Text("");
-    UI::Text("I only recommend using these buttons if you've played on other devices or had the plugin disabled for a while");
+    UI::TextWrapped("I only recommend using the buttons on this page if you've played on other devices or had the plugin disabled for a while");
+    UI::Text("");
+    UI::TextWrapped("Use these buttons to find any records that are not already in your collection");
 
-    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::Button("Re-check Nadeo medals")) {
+    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::Button("Search for missing Nadeo medals")) {
         checkAllNadeoRecords();
     }
 
 #if DEPENDENCY_WARRIORMEDALS
-    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::Button("Re-check Warrior medals")) {
+    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0 && UI::Button("Search for missing Warrior medals")) {
         checkWarriorRecords();
+    }
+#endif
+
+#if DEPENDENCY_CHAMPIONMEDALS
+    if(settings_displayMode & DISPLAY_MODE_MEDALS > 0) {
+        UI::BeginDisabled();
+        UI::Button("Search for missing Champion medals");
+        UI::SameLine();
+        UI::TextWrapped("Champion Medal support is an experiment - You need to load individual maps. Sorry.");
+        UI::EndDisabled();
     }
 #endif
 
@@ -176,7 +188,7 @@ void renderAdvancedTab() {
 
     if(settings_displayMode & DISPLAY_MODE_LEADERBOARDS > 0) {
         UI::Text("");
-        UI::Text("Checking leaderboard records is deliberately quite slow to avoid excessive server load");
+        UI::TextWrapped("Use these buttons to see if any of your existing times are on the regional leaderboards");
         for (uint i = 0; i < medalRecords.Length; i++) {
             auto mc = medalRecords[i];
 
@@ -186,13 +198,13 @@ void renderAdvancedTab() {
 
             if (LEADERBOARD_STATUS.recordCheckInProgress) {
                 UI::BeginDisabled();
-                UI::ButtonColored("Re-check leaderboards for your " + mc.name + " records", 0.5, 0, 0.5);
+                UI::ButtonColored("Check " + mc.name + " medal times against the leaderboards", 0.5, 0, 0.5);
                 UI::SameLine();
-                UI::Text("(Unavailable while scan in progress)");
+                UI::TextWrapped("(Unavailable while scan in progress)");
                 UI::EndDisabled();
             }
             else {
-                if (UI::ButtonColored("Re-check leaderboards for your " + mc.name + " records", mc.buttonHsv[0], mc.buttonHsv[1], mc.buttonHsv[2])) {
+                if (UI::ButtonColored("Check " + mc.name + " medal times against the leaderboards", mc.buttonHsv[0], mc.buttonHsv[1], mc.buttonHsv[2])) {
                     mc.rescanCompleted = false;
                     startnew(doLeaderboardChecks);
                 }
@@ -200,12 +212,13 @@ void renderAdvancedTab() {
                 UI::SameLine();
                 const int minutes = int(Math::Ceil((mc.count * LEADERBOARD_RECORD_THROTTLE_MS / float(1000)) / 60));
                 const string colour = (minutes >= 10) ? "\\$f00" : "\\$ccc";
-                UI::Text(colour + "Will take about " + minutes + " minute" + (minutes == 1 ? "" : "s") + " to run");
+                UI::TextWrapped(colour + "Will take about " + minutes + " minute" + (minutes == 1 ? "" : "s") + " to run");
             }
         }
+        UI::TextWrapped("Checking leaderboard records is deliberately quite slow to avoid excessive server load");
 
         // Show the current progression if available (From LeaderboardChecker)
-        UI::Text(LEADERBOARD_STATUS.currentScanDescription);
+        UI::TextWrapped(LEADERBOARD_STATUS.currentScanDescription);
 
         if (LEADERBOARD_STATUS.recordCheckInProgress) {
             if (UI::ButtonColored("Stop the current scan", 0, 1, 1)) {

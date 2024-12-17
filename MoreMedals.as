@@ -1,9 +1,18 @@
 uint checkForPluginMedals(const string &in currentMapId, int bestTime) {
     int output = NO_MEDAL_ID;
+
+#if DEPENDENCY_CHAMPIONMEDALS
+    int championTargetTime = ChampionMedals::GetCMTime();
+    if (championTargetTime > 0 && bestTime <= championTargetTime) {
+        log("Holy moly! You got the Champion medal (" + championTargetTime + " vs " + bestTime + ")");
+        output = CHAMPION_MEDAL_ID;
+    }
+#endif
+
 #if DEPENDENCY_WARRIORMEDALS
     // log("Checking for Warrior medals");
-    int targetTime = WarriorMedals::GetWMTime(currentMapId);
-    if (targetTime > 0 && bestTime <= targetTime) {
+    int warriorTargetTime = WarriorMedals::GetWMTime(currentMapId);
+    if (output == NO_MEDAL_ID  && warriorTargetTime > 0 && bestTime <= warriorTargetTime) {
         log("You did it! You got the Warrior medal");
         output = WARRIOR_MEDAL_ID;
     }
@@ -23,11 +32,11 @@ void checkWarriorRecords() {
 void getWarriorMedals() {
     bool didSomethingChange = false;
     MEDAL_CHECK_STATUS.currentScanDescription = "Warrior medal check in progress (This should only take a second)";
+    int medalsFound = 0;
 
 #if DEPENDENCY_WARRIORMEDALS
     dictionary warriorData = WarriorMedals::GetMaps();
     array<string> mapUids = warriorData.GetKeys();
-    int medalsFound = 0;
 
     for(uint i = 0; i < mapUids.Length; i++) {
         string mapUid = mapUids[i];

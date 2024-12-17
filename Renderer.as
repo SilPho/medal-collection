@@ -176,6 +176,12 @@ void insertAccomplismentRow(array<MedalCount@> recordArray, const int totalMedal
 		if (currentMapMedal == medalId || currentMapLeaderboardId == medalId) {
 			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 0, 1));
 		}
+#if DEPENDENCY_CHAMPIONMEDALS
+		else if (currentMapId != "" && medalId == CHAMPION_MEDAL_ID && ChampionMedals::GetCMTime() == 0) {
+			// Faded grey for when the map doesn't have a Champion medal
+			UI::PushStyleColor(UI::Col::Text, vec4(1, 1, 1, 0.4));
+		}
+#endif
 #if DEPENDENCY_WARRIORMEDALS
 		else if (currentMapId != "" && medalId == WARRIOR_MEDAL_ID && WarriorMedals::GetWMTime() == 0) {
 			// Faded grey for when the map doesn't have a Warrior medal

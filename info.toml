@@ -2,8 +2,8 @@
 name     = "Medal Collection"
 author   = "SilPho"
 category = "Race"
-version  = "2.4"
+version  = "2.5"
 
 [script]
 dependencies = [ 'NadeoServices' ]
-optional_dependencies = [ "WarriorMedals" ]
+optional_dependencies = [ "WarriorMedals", "ChampionMedals" ]

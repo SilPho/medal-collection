@@ -24,6 +24,8 @@ class LeaderboardResult {
 AsyncCheckStatus LEADERBOARD_STATUS = AsyncCheckStatus();
 AsyncCheckStatus MEDAL_CHECK_STATUS = AsyncCheckStatus();
 
+bool statusCheckedAtLeastOnce = false;
+
 const int LEADERBOARD_RECORD_THROTTLE_MS = 2000; // Milliseconds to wait between Nadeo API calls
 
 const dictionary ZONE_ORDER = {{"0", WORLD_ID}, {"1", CONTINENT_ID}, {"2", TERRITORY_ID}, {"3", REGION_ID}, {"4", DISTRICT_ID}};
@@ -78,7 +80,7 @@ void doLeaderboardChecks() {
 
         try {
             // Check to see which leaderboard scans have been run before
-            if (LEADERBOARD_STATUS.heldCheckEnded == -1) {
+            if (!statusCheckedAtLeastOnce) {
                 log("First check since game launch: Time to read previous status");
                 readCheckerStatus();
             }
@@ -267,11 +269,11 @@ LeaderboardResult getPlayerLeaderboardRecord(const string &in mapUid, bool skipC
         Json::Value zoneLeader = zone["top"][0];
         auto leaderId = string(zoneLeader["accountId"]);
         uint score = int(zoneLeader["score"]);
-        // log(string(zone["zoneName"]) + ". Record is " + int(zoneLeader["score"]) + " by " + leaderId);
+        log(string(zone["zoneName"]) + ". Record is " + score + " by " + leaderId);
 
         // Either the server will say you have the record, or the current time is better
         // Checking for an improved time does mean we assume the zones remain ordered from widest to narrowest (From World to district)
-        if (leaderId == currentPlayerId || bestRaceTime < score) {
+        if (leaderId == currentPlayerId || (score > 0 && score != MAX_INT && bestRaceTime < score)) {
             log("\\$fffYou have the " + string(zone["zoneName"]) + " record on " + mapUid + " (" + bestRaceTime + " < " + score + ")");
             int leaderboardId = int(ZONE_ORDER["" + i]);
             leaderboardCache.Set(mapUid, leaderboardId);
@@ -310,6 +312,7 @@ void readCheckerStatus() {
         auto content = Json::FromFile(checkerStatusFile);
 
         LEADERBOARD_STATUS.heldCheckEnded = readIntValue(content, "checkEnded");
+        champion.rescanCompleted = readBoolValue(content, "championCheckDone");
         warrior.rescanCompleted = readBoolValue(content, "warriorCheckDone");
         author.rescanCompleted = readBoolValue(content, "authorCheckDone");
         gold.rescanCompleted = readBoolValue(content, "goldCheckDone");
@@ -326,11 +329,14 @@ void readCheckerStatus() {
             log("  - " + medalRecords[i].name + ": " + medalRecords[i].rescanCompleted);
         }
     }
+
+    statusCheckedAtLeastOnce = true;
 }
 
 void writeCheckerStatus() {
     dictionary toWrite = {
         { "checkEnded", LEADERBOARD_STATUS.heldCheckEnded },
+        { "championCheckDone", champion.rescanCompleted },
         { "warriorCheckDone", warrior.rescanCompleted },
         { "authorCheckDone", author.rescanCompleted },
         { "goldCheckDone", gold.rescanCompleted },
